@@ -19,3 +19,6 @@
 - 18:40 [完成] TASK-002 固件编码+构建+烧录：ble_ota v0.1.17 组件接入（main+ota_core+ota_shared 三层），构建零告警，app bin 656864B（ota_0 槽占用 36%），flash 4 镜像 hash verified（涉及文件: firmware/main/*, firmware/components/*, firmware/partitions.csv, firmware/sdkconfig.defaults）
 - 18:40 [修复] ERR-005: ble_ota 组件 extern 引用 app 全局 notify_sem（隐式契约），static 化导致链接失败 → 恢复非 static 全局（META-001）；另核实 IDF v6 下 host_init 不含 controller init，app_main 显式补齐（META-002）
 - 18:40 [记录] 跨重启续传结论：ble_ota 组件重启后 cur_sector 归零不支持跨重启续传；固件交付 sector 级进度落盘（ota_prog/progress）+ resume info 日志，续传由上位机配合 Indicate ACK 实现
+- 19:17 [完成] TASK-002 固件侧交付：smoke-tester 独立验证 PASS-with-notes（产物/偏移/分层/ai 一致性全过）
+- 19:25 [修复] partitions.csv 注释偏移修正（app 对齐 0x10000，ota_0 实际 0x20000）+ GitHub 补推（走 7890 代理）
+- 19:30 [完成] 真机启动验证：全日志锚点命中（v1.0.0/ota_0/VALID/no-action/C6-OTA-1128/ota_task target=ota_1）→ TASK-002 完结，开工 TASK-003
