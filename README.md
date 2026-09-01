@@ -69,7 +69,10 @@ python host/ble_ota_host.py --flash new.bin   # 传输+校验+激活
 
 ## 开发路线（issue 驱动）
 
-见 Gitee/GitHub Issues：里程碑 M1 固件（ble_ota 集成/回滚/续传）→ M2 上位机 → M3 全链路联调（含回滚测试）。
+开发计划以 issue 驱动，里程碑：**M1** 固件（ble_ota 集成/回滚/续传/CRC）→ **M2** 上位机（扫描/传输引擎/激活）→ **M3** 全链路联调（含回滚实测）。
+
+- GitHub（issues 主战场）：https://github.com/Atul-8/esp32c6-ble-ota
+- Gitee（代码镜像）：https://gitee.com/waterguy/esp32c6-ble-ota
 
 ## License
 
