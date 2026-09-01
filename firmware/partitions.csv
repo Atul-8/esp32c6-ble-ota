@@ -1,7 +1,7 @@
 # Name,   Type, SubType, Offset,  Size, Flags
 # 双 OTA 槽，无 factory；首发烧 ota_0，运行期互斥升级
 # 布局(4MB flash, 分区表 @0x8000): nvs 0x9000/24K, otadata 0xF000/8K,
-# phy 0x11000/4K, ota_0 0x12000/1.75M, ota_1 0x1D2000/1.75M, 尾部余量 ~0x6E000
+# phy 0x11000/4K, ota_0 0x20000/1.75M（app 分区按 0x10000 对齐）, ota_1 0x1E0000/1.75M, 尾部余量 ~0x60000
 nvs,      data, nvs,     ,        0x6000,
 otadata,  data, ota,     ,        0x2000,
 phy_init, data, phy,     ,        0x1000,
