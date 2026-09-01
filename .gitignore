@@ -1,0 +1,18 @@
+# ESP-IDF
+firmware/build/
+firmware/sdkconfig.old
+firmware/dependencies.lock
+firmware/managed_components/
+firmware/version.inc
+
+# Python
+host/__pycache__/
+*.pyc
+.venv/
+
+# Claude/AI 本地
+.claude/
+
+# OS
+Thumbs.db
+.DS_Store
