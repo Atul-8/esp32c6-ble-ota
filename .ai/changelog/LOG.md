@@ -11,4 +11,8 @@
 - 16:30 [完成] 用户手动 RST 后 app 正常启动，两轮 Hello world! 确认 → TASK-001 完结。ERR-003 根因修正：usbipd 虚拟复位时序问题（非硬件），后续烧录后手动 RST
 - 16:30 [决策] 开工 TASK-002 BLE OTA 固件，调度 embedded-firmware-engineer
 - 16:45 [决策] 用户指示用开源 OTA 库 → 调研结论：采用 espressif/ble_ota v0.1.17 官方组件（协议带 sector CRC16+断点续传），否决 fbiego（无 CRC 无续传已停更）；回滚用 IDF v6 原生 ROLLBACK_ENABLE + esp_ota_resume()；REQ-002 记录，手搓任务书作废
+- 17:15 [完成] git 仓库初始化 + README/.gitignore + 首次提交（hello_world 基线 + 构建脚本 + .ai 协调层）
+- 17:20 [完成] Gitee 建仓 waterguy/esp32c6-ble-ota + 推送（合并远程 LICENSE 初始提交）
+- 17:25 [完成] GitHub 建仓 Atul-8/esp32c6-ble-ota + 推送 + 10 个 issues（M1×4 固件 / M2×3 上位机 / M3×3 联调文档）+ 6 标签
+- 17:25 [记录] ERR-004: Gitee PAT 缺 issues scope，POST issue 404（伪装），issues 主战场放 GitHub，Gitee 做代码镜像
 
