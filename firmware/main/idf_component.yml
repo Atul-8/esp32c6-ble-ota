@@ -1,0 +1,3 @@
+dependencies:
+  idf: ">=5.0"
+  espressif/ble_ota: "^0.1.17"

@@ -16,3 +16,6 @@
 - 17:25 [完成] GitHub 建仓 Atul-8/esp32c6-ble-ota + 推送 + 10 个 issues（M1×4 固件 / M2×3 上位机 / M3×3 联调文档）+ 6 标签
 - 17:25 [记录] ERR-004: Gitee PAT 缺 issues scope，POST issue 404（伪装），issues 主战场放 GitHub，Gitee 做代码镜像
 
+- 18:40 [完成] TASK-002 固件编码+构建+烧录：ble_ota v0.1.17 组件接入（main+ota_core+ota_shared 三层），构建零告警，app bin 656864B（ota_0 槽占用 36%），flash 4 镜像 hash verified（涉及文件: firmware/main/*, firmware/components/*, firmware/partitions.csv, firmware/sdkconfig.defaults）
+- 18:40 [修复] ERR-005: ble_ota 组件 extern 引用 app 全局 notify_sem（隐式契约），static 化导致链接失败 → 恢复非 static 全局（META-001）；另核实 IDF v6 下 host_init 不含 controller init，app_main 显式补齐（META-002）
+- 18:40 [记录] 跨重启续传结论：ble_ota 组件重启后 cur_sector 归零不支持跨重启续传；固件交付 sector 级进度落盘（ota_prog/progress）+ resume info 日志，续传由上位机配合 Indicate ACK 实现
