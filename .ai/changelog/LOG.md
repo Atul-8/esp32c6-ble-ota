@@ -49,3 +49,5 @@
 - 11:50 [完成] 真机 headless 全流程 PASS：161 sectors/1443 packets/44.7s/0 错误，事件流断言+热力图全绿+reboot_ok；CLI --help/scan/dry-run 回归全绿；临时驱动脚本已删；TASK-002 完成 (host/)
 - 14:20 [完成] 任务表 TASK-002（GUI）/TASK-003（审阅）标 done；smoke-tester 独立复核 GUI 交付 PASS（16 项全过，真人窗口交互留用户首验）
 - 14:20 [记录] 深度审阅报告入库 .ai/docs/review-ota-20260902.md：3 P0（会话错位链/假成功判定/jump 死代码）+ 8 P1 + 8 P2，生产就绪度=开发联调工具级；Top5 测试缺口已列
+- 14:50 [完成] 问题沉淀收尾：META-007/008 回流全局（META-199/200）；审阅报告 3 P0 + 8 P1 + 8 P2 留档 .ai/docs/review-ota-20260902.md（P0 修复待用户决策）
+- 14:55 [修复] 全局仓库 META-189~200 补建 rules/ 单文件（此前只有汇总无单文件，v2 索引漏扫）；发现索引工具文件名正则 ASCII 限制，12 个中文命名文件改 ASCII slug，索引 207→219 条
