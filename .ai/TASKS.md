@@ -5,8 +5,8 @@
 
 ## 待办（pending）
 - [x] TASK-001 [BUILD] 创建git仓库+整理README+建立issue推动计划+同步创建gitee仓库（自建自推） @pm
-- [ ] TASK-002 [TESTING] 上位机 GUI 可视化测试工具（tkinter，sector 热力图+协议日志+测试场景） @pc-host-engineer
-- [ ] TASK-003 [TESTING] OTA 全链路功能审阅（固件+上位机 代码审查/边界/风险/测试覆盖） @code-reviewer
+- [x] TASK-002 [TESTING] 上位机 GUI 可视化测试工具（tkinter，sector 热力图+协议日志+测试场景） @pc-host-engineer
+- [x] TASK-003 [TESTING] OTA 全链路功能审阅（固件+上位机 代码审查/边界/风险/测试覆盖） @code-reviewer
 
 ## 进行中（doing）
 

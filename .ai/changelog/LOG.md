@@ -47,3 +47,5 @@
 - 11:00 [完成] 中断续作：修 ble_ota_gui.py 残缺（_hide_tip 行/:171 坏 event_cb 表达式/补齐整个 OtaGui 类+Worker cancel 入口），py_compile+import+UI 冒烟过 (host/ble_ota_gui.py)
 - 11:30 [修复] ERR-011 worker 线程读 tkinter Variable 崩溃 → on_start 主线程快照参数；提炼 META-008 (host/ble_ota_gui.py, errors/raw/ERR-011.md, meta-rules.md)
 - 11:50 [完成] 真机 headless 全流程 PASS：161 sectors/1443 packets/44.7s/0 错误，事件流断言+热力图全绿+reboot_ok；CLI --help/scan/dry-run 回归全绿；临时驱动脚本已删；TASK-002 完成 (host/)
+- 14:20 [完成] 任务表 TASK-002（GUI）/TASK-003（审阅）标 done；smoke-tester 独立复核 GUI 交付 PASS（16 项全过，真人窗口交互留用户首验）
+- 14:20 [记录] 深度审阅报告入库 .ai/docs/review-ota-20260902.md：3 P0（会话错位链/假成功判定/jump 死代码）+ 8 P1 + 8 P2，生产就绪度=开发联调工具级；Top5 测试缺口已列
