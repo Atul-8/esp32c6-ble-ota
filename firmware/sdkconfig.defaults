@@ -20,6 +20,10 @@ CONFIG_BT_NIMBLE_ENABLED=y
 CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=517
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=6144
 
+# BLE 广播设备名（ERR-006）：vendor 组件 components/ble_ota 的 Kconfig 项，
+# 组件在 host task 启动前 name_set，广播字段构造读取的即为该值（消除竞态）
+CONFIG_BLE_OTA_DEVICE_NAME="C6-OTA-1128"
+
 # OTA 版本回滚（issue #2）：新镜像首启 PENDING_VERIFY，由 ota_rollback_confirm 确认
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 

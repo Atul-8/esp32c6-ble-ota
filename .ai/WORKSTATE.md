@@ -17,18 +17,19 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
   - [验证: shared✓(CRC/分包单测) core✓(协议状态机逻辑) interface✓(真机 GATT+ACK 实测) presentation✓(CLI 实跑)]
 
 ## 未完成队列
-- [ ] **固件修复 ERR-007**：ota_task.c fw_len 改为循环内实时读取（阻塞 TASK-004 全链路）
-- [ ] **固件修复 ERR-006**：广播名时序（name_set 挪到 host_init 前 / 同步回调内改名重开广播）；修复后上位机 scan 名字过滤自动恢复
+- [x] **固件修复 ERR-007** ✓ 完成（embedded-firmware-engineer 2026-09-02）：ota_task.c fw_len 启动缓存已删除，数据分支内实时读取；构建零错误 bin=656,096B，已烧录（真机运行验证归 TASK-004）
+- [x] **固件修复 ERR-006** ✓ 完成（embedded-firmware-engineer 2026-09-02）：ble_ota v0.1.17 vendor 至 firmware/components/ble_ota，设备名走 CONFIG_BLE_OTA_DEVICE_NAME="C6-OTA-1128"（Kconfig），app_main 事后覆盖删除；构建零错误 + 烧录成功，bin strings 仅含 C6-OTA-1128；**空口广播名待 PM 手动 RST 后 Windows 扫描确认**
 - [ ] TASK-003 收尾：固件修复后跑一次真实 .bin 全链路传输（上位机侧已就绪，期望进度条+断电续传+reboot 检测全链路验证）
 - [ ] TASK-004 全链路 BLE OTA 联调（含回滚测试：升级后验证 PENDING_VERIFY→confirmed 锚点）
 - [注意] 烧录后需手动按 RST 键启动 app（ERR-003: usbipd 虚拟复位不可信）
 - [注意] GitHub 推送需走代理 `git -c http.proxy=http://127.0.0.1:7890 push github master`（系统代理 ProxyEnable=0，直连被重置）
-- [注意] 上位机：设备广播名当前为 nimble-ble-ota（ERR-006），用 `--mac 14:C1:9F:E5:11:2A` 或 scan 表按 MAC 识别
+- [注意] 上位机：ERR-006 已修复（广播名 C6-OTA-1128），待 PM 空口确认后 scan 名字过滤可恢复；联调前仍可用 `--mac 14:C1:9F:E5:11:2A`
+- [注意] components/ble_ota 为本地 vendor 组件（v0.1.17 + 设备名 patch），勿再从 main/idf_component.yml 声明 espressif/ble_ota（会与本地组件重名冲突）；升级组件时重新 vendor 并重打 patch
 
 ## 上次中断点
-- 文件: host/ble_ota_host.py（完成）/ firmware/main/ota_task.c:65（待固件侧修复）
-- 操作: TASK-003 上位机核心完成；dry-run 真机握手通过
-- 待恢复: 固件侧修 ERR-007/ERR-006 → 重烧 → 上位机真实 .bin 全链路传输验证（TASK-004）
+- 文件: firmware/components/ble_ota/src/nimble_ota.c + firmware/main/main.c（ERR-006 已修复并烧录）
+- 操作: ERR-006 修复完成（vendor 组件 + Kconfig 设备名），构建零错误 + 烧录成功
+- 待恢复: PM 手动 RST 后空口验证广播名 C6-OTA-1128 → TASK-003 收尾（上位机真实 .bin 全链路传输，TASK-004，注意手动按 RST）
 
 ## 环境事实
 - ESP-IDF: v6.0.2 @ WSL `/root/esp/v6.0.2/esp-idf`

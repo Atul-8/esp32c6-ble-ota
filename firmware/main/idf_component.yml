@@ -1,3 +1,6 @@
+# ERR-006 修复：ble_ota 组件已 vendor 到 ../components/ble_ota（本地组件优先），
+# 此处不再声明 espressif/ble_ota。vendor 组件自带的 idf_component.yml 继续声明
+# 其依赖（cmake_utilities / espressif/cjson / espressif/esp_encrypted_img），
+# 组件管理器会正常解析并拉取它们。
 dependencies:
   idf: ">=5.0"
-  espressif/ble_ota: "^0.1.17"

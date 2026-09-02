@@ -30,3 +30,8 @@
 - 21:15 [完成] 单测：CRC XMODEM 向量 0x31C3、ACK CRC 正反例、MTU517/518 分包（9 包/尾包 0xFF+CRC）、小固件单尾包、MTU 下限拒绝
 - 21:20 [完成] 真机实测：scan 发现 14:C1:9F:E5:11:2A -68dBm；info GATT 表 8018/8020-8023 全对；dry-run Start ACK 03000100..56a8 + Stop ACK 03000200..1b40 → 握手 PASS
 - 21:25 [记录] 真实 .bin 传输未执行（固件 ERR-007 阻塞，上位机已就绪）；META-003-ASYNC / META-004-CONCURRENCY 提炼入库
+- (次日) [修复] ERR-007：firmware/main/ota_task.c 删除 ota_task 启动时的 `const fw_len = esp_ble_ota_get_fw_length()` 缓存，改为数据分支内实时读取（example 同款语义），ready 日志改为 "wait Start cmd"；同类假设排查：esp_ota_get_boot_partition/get_next_update_partition 仅依赖运行分区表与 BLE Start 无关，无需改动 (涉及文件: firmware/main/ota_task.c)
+- (次日) [验证] WSL 构建零错误（bin 0xa05e0=656,096B，app 分区余 64%），烧录成功（Hash verified）；真机运行验证归 PM/TASK-004
+- (次日) [决策] ERR-006 选方案 A（vendor 组件）：实测 wslbuild.sh rsync --delete 每次清空 WSL 侧 managed_components + sdkconfig（dry-run 证据），方案 B patch 必丢且游离版本控制；方案 A patch 入 git + Kconfig 定制点
+- (次日) [修复] ERR-006：ble_ota v0.1.17 vendor 至 firmware/components/ble_ota，nimble_ota.c name_set 改 CONFIG_BLE_OTA_DEVICE_NAME（Kconfig 新增），sdkconfig.defaults 设 "C6-OTA-1128"；main/idf_component.yml 移除 espressif/ble_ota（vendor 自带 yml 继续拉依赖）；main/CMakeLists.txt 显式 REQUIRES ble_ota；app_main 删除事后 name_set (涉及文件: firmware/components/ble_ota/*, firmware/main/main.c, firmware/main/idf_component.yml, firmware/main/CMakeLists.txt, firmware/sdkconfig.defaults)
+- (次日) [验证] 构建零错误（bin 656,720B）+ 烧录 hash verified；managed_components 无 espressif__ble_ota 残留、lock direct_dependencies=cjson+cmake_utilities；bin strings 仅 "C6-OTA-1128" 无 "nimble-ble-ota"；空口实测归 PM（手动 RST 后 Windows 扫描）

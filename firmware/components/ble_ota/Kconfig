@@ -1,0 +1,38 @@
+menu "OTA Manager"
+    choice OTA_TYPE
+        prompt "Type of OTA"
+        default OTA_WITHOUT_SECURITY
+
+        config OTA_WITHOUT_SECURITY
+            bool "Enable OTA without security"
+            help
+                This transfers file without any security using OTA
+
+        config OTA_WITH_PROTOCOMM
+            bool
+            prompt "Enable protocomm level security"
+            depends on BT_NIMBLE_ENABLED
+            help
+                Used to enable protocomm level security for file transfer using OTA
+
+        config PRE_ENC_OTA
+            bool
+            prompt "Enable pre encrypted OTA"
+            depends on BT_NIMBLE_ENABLED
+            help
+                Used to enable transferring pre encrypted file via OTA
+    endchoice
+
+    # 本地 vendor 定制点（ERR-006）：GAP 设备名原为源码硬编码 "nimble-ble-ota"，
+    # host_init 内 name_set 后 host task 的 sync_cb 立即用它构造广播字段，
+    # app 侧事后覆盖存在竞态。改为 Kconfig 项，值在 app 的 sdkconfig.defaults 设定，
+    # 使 name_set 在 host task 启动前就写入最终值，消除竞态窗口。
+    config BLE_OTA_DEVICE_NAME
+        string "GAP device name used in BLE OTA advertising"
+        default "nimble-ble-ota"
+        help
+            Device name set via ble_svc_gap_device_name_set() before the
+            NimBLE host task starts. Keep it short enough to fit in a
+            single legacy advertising packet (31-byte limit) together with
+            flags / TX power / 16-bit UUID fields.
+endmenu

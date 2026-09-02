@@ -62,7 +62,8 @@ void ota_task(void *arg)
     uint32_t saved_sectors = 0;
     uint8_t *data = NULL;
     size_t item_size = 0;
-    const uint32_t fw_len = esp_ble_ota_get_fw_length();
+    /* ERR-007 修复：fw_length 由 BLE Start 命令在本任务启动之后才写入（唯一写入时机），
+     * 禁止启动时缓存——必须在数据分支内实时调用 esp_ble_ota_get_fw_length()（example 同款语义） */
 
     notify_sem = xSemaphoreCreateCounting(100, 0);
     xSemaphoreGive(notify_sem);
@@ -93,8 +94,7 @@ void ota_task(void *arg)
         goto OTA_ERROR;
     }
 
-    ESP_LOGI(TAG, "ota_task ready, target=%s, fw_len=%" PRIu32,
-             s_target_partition.label, fw_len);
+    ESP_LOGI(TAG, "ota_task ready, target=%s, wait Start cmd", s_target_partition.label);
 
     for (;;) {
         data = (uint8_t *)xRingbufferReceive(s_ringbuf, &item_size, (TickType_t)portMAX_DELAY);
@@ -113,6 +113,9 @@ void ota_task(void *arg)
             }
             recv_len += item_size;
             vRingbufferReturnItem(s_ringbuf, (void *)data);
+
+            /* 实时读 fw_length：Start 命令晚于本任务启动（ERR-007） */
+            uint32_t fw_len = esp_ble_ota_get_fw_length();
 
             /* 每收满 1 个 sector 持久化一次进度（issue #3） */
             while (recv_len - saved_sectors * OTA_SECTOR_SIZE >= OTA_SECTOR_SIZE) {

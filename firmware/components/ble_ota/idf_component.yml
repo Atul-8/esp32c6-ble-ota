@@ -1,0 +1,22 @@
+dependencies:
+  cmake_utilities: 0.*
+  espressif/cjson:
+    rules:
+    - if: idf_version >=6.0
+    version: 1.*
+  espressif/esp_encrypted_img: ^2.0.1
+  idf: '>=4.4'
+description: Espressif defined BLE OTA profile
+repository: git://github.com/espressif/esp-iot-solution.git
+repository_info:
+  commit_sha: 939e600e8ef81fbebd8bd44180d81ae2a2612801
+  path: components/bluetooth/ble_profiles/esp/ble_ota
+targets:
+- esp32
+- esp32c3
+- esp32h2
+- esp32s3
+- esp32c2
+- esp32c6
+url: https://github.com/espressif/esp-iot-solution/tree/master/components/bluetooth/ble_profiles/esp/ble_ota
+version: 0.1.17

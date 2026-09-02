@@ -5,7 +5,11 @@
  *   NVS -> 进度日志 -> 版本/分区/镜像状态日志 -> 回滚确认(必须先于 BLE init：
  *   PENDING_VERIFY 状态下 esp_ota_begin 会拒绝) -> controller init(IDF v6 下
  *   ble_ota 组件的 host_init 只初始化 host 栈，见 nimble_port.c 源码核实) ->
- *   ringbuf -> host_init -> 设备名覆盖 -> 回调注册 -> ota_task -> 广播名锚点日志
+ *   ringbuf -> host_init -> 回调注册 -> ota_task -> 广播名锚点日志
+ *
+ * 广播名（ERR-006）：由 vendor 组件 components/ble_ota 在 host_init 内部、
+ * host task 启动前经 CONFIG_BLE_OTA_DEVICE_NAME 设置（sdkconfig.defaults 配置
+ * 为 "C6-OTA-1128"），sync_cb 构造广播字段时读到的就是最终值，app 不再事后覆盖。
  */
 #include <inttypes.h>
 
@@ -130,20 +134,14 @@ void app_main(void)
         return;
     }
 
-    /* 7. NimBLE host + GATT 服务 + 开始广播（同步回调内异步起广播） */
+    /* 7. NimBLE host + GATT 服务 + 设备名（CONFIG_BLE_OTA_DEVICE_NAME，
+     *    host task 启动前写入）+ 开始广播（同步回调内异步起广播） */
     ESP_ERROR_CHECK(esp_ble_ota_host_init());
 
-    /* 8. 覆盖组件硬编码的 "nimble-ble-ota"。host 同步需完成多轮 HCI 命令（毫秒级），
-     *    此处紧随 host_init 返回执行，必然先于组件读取广播名。 */
-    int rc = ble_svc_gap_device_name_set(OTA_BLE_DEVICE_NAME);
-    if (rc != 0) {
-        ESP_LOGE(TAG, "[BLE_OTA] gap name set failed, rc=%d", rc);
-    }
-
-    /* 9. 注册固件数据回调 + 启动落盘任务 */
+    /* 8. 注册固件数据回调 + 启动落盘任务 */
     ESP_ERROR_CHECK(esp_ble_ota_recv_fw_data_callback(ota_recv_fw_cb));
     ota_task_init();
 
-    /* 10. 广播锚点 */
+    /* 9. 广播锚点 */
     wait_adv_and_log();
 }
