@@ -22,3 +22,11 @@
 - 19:17 [完成] TASK-002 固件侧交付：smoke-tester 独立验证 PASS-with-notes（产物/偏移/分层/ai 一致性全过）
 - 19:25 [修复] partitions.csv 注释偏移修正（app 对齐 0x10000，ota_0 实际 0x20000）+ GitHub 补推（走 7890 代理）
 - 19:30 [完成] 真机启动验证：全日志锚点命中（v1.0.0/ota_0/VALID/no-action/C6-OTA-1128/ota_task target=ota_1）→ TASK-002 完结，开工 TASK-003
+- 21:00 [完成] TASK-003 上位机开发：host/ble_ota_host.py（626 行，scan/info/flash+--dry-run/--mac，单文件 asyncio+bleak 3.0.2）
+- 21:00 [决策] 协议契约以组件源码逐行核实为准，修正任务书 3 处：COMMAND ACK 无 cmd_echo 字段（bytes[2:4] 直接是 status）；CRC16 为 XMODEM 变体（init 0x0000 非 CCITT-FALSE 0xFFFF）；RECV_FW/COMMAND 仅 WRITE-with-response（无 WRITE_NR，response=True 必选）
+- 21:00 [验证] bleak 3.0.2 API 适配：mtu_size 只读属性（WinRT 自动协商，实测 517），scan 用 return_adv=True 取 adv.local_name/rssi
+- 21:05 [发现] ERR-006 固件广播名竞态：真机空中名 nimble-ble-ota（TASK-002 的 adv 锚点只证 GAP 名设置未证空口）；上位机加 --mac 匹配兼容
+- 21:10 [发现] ERR-007 固件 ota_task fw_len 启动缓存恒 0（源码审查）：真实传输首 sector 后必提前 esp_ota_end；固件侧待修，阻塞全链路
+- 21:15 [完成] 单测：CRC XMODEM 向量 0x31C3、ACK CRC 正反例、MTU517/518 分包（9 包/尾包 0xFF+CRC）、小固件单尾包、MTU 下限拒绝
+- 21:20 [完成] 真机实测：scan 发现 14:C1:9F:E5:11:2A -68dBm；info GATT 表 8018/8020-8023 全对；dry-run Start ACK 03000100..56a8 + Stop ACK 03000200..1b40 → 握手 PASS
+- 21:25 [记录] 真实 .bin 传输未执行（固件 ERR-007 阻塞，上位机已就绪）；META-003-ASYNC / META-004-CONCURRENCY 提炼入库

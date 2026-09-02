@@ -23,3 +23,27 @@
 - **关联专家(applies_to)**: embedded-firmware-engineer
 - **触发关键词(keywords)**: ble_ota, esp_ble_ota_host_init, esp_nimble_init, controller init, NimBLE, IDF v6
 - **embedding**: (预留)
+
+### META-003-ASYNC: 异步回调中读取的全局配置，写入必须先于 init 或挂接同步点
+
+- **规则**: 组件/库在异步回调（host sync、连接事件等）里读取全局配置（设备名、广播参数等）时，app 侧写入必须先于 init 调用，或显式挂接到同步点之后（注册同步回调内再改+重启受影响的外设状态）；禁止以"我的写代码在函数返回之前执行"推断竞态胜出。验收外设行为以对端实测（空口广播、抓包）为准，日志锚点只反映软件视角
+- **适用场景**: NimBLE/Bluedroid 广播名与广播数据、任何"init 启动后台任务+回调消费配置"的框架集成
+- **源错误**: ERR-006（ble_ota 组件 esp_ble_ota_on_sync() 内构造广播读取 GAP 名；app_main host_init 后才 name_set，真机广播定格为组件默认名 nimble-ble-ota）
+- **检查方式**: 审查 init 与配置写入的顺序：配置 → init；或存在"同步事件 → 改配置 → 重建外设状态"的显式链路。对广播类配置用 BLE 扫描实测名称
+- **类别(category)**: ASYNC
+- **关联层(layer)**: interface, core
+- **关联专家(applies_to)**: embedded-firmware-engineer, pc-host-engineer
+- **触发关键词(keywords)**: 竞态, race, 异步回调, 广播名, adv data, nimble, on_sync, ble_svc_gap_device_name_set, 时序
+- **embedding**: (预留)
+
+### META-004-CONCURRENCY: 命令注入型跨任务参数禁止启动时缓存
+
+- **规则**: 由外部命令（对端协议命令、其他任务）写入、任务循环消费的参数，消费任务禁止在启动时一次性缓存；必须每次实时读取，或显式等待"已注入"信号后再消费。缓存合法的前提是存在明确的 happens-before 边（信号量/队列传递）
+- **适用场景**: OTA fw_length、采样配置、任何"Start 命令带参数 → worker 循环用参数"模式
+- **源错误**: ERR-007（ota_task.c:65 启动时缓存 esp_ble_ota_get_fw_length() 恒为 0；官方 example 在循环条件实时调用。首 sector 落盘即 recv_len>=0 提前 esp_ota_end）
+- **检查方式**: 审查 worker 任务入口处的 const 缓存提取 diff：被缓存的值是否由另一个任务/对端命令在任务启动后才写入？是则改为实时读或加就绪等待
+- **类别(category)**: CONCURRENCY
+- **关联层(layer)**: core, interface
+- **关联专家(applies_to)**: embedded-firmware-engineer, pc-host-engineer
+- **触发关键词(keywords)**: fw_length, 缓存, 跨任务, happens-before, ota_task, example 移植, 时序屏障
+- **embedding**: (预留)

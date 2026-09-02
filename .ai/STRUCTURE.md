@@ -18,7 +18,7 @@ firmware/                          ESP32-C6 固件（七层分治映射见下）
   components/ota_shared/           shared 层：ota_version.h（版本/设备名/sector 常量）+ ota_nvs_keys.h（NVS 命名空间/键名），纯宏无代码
   components/ota_core/             core 层：ota_rollback.c（自检+PENDING_VERIFY 确认/回滚）、ota_progress_store.c（NVS blob 进度存取），0 个 ESP_LOG/printf
 host/
-  ble_ota.py                       上位机主程序（扫描/连接/传输/校验/激活）（TASK-002 待开发）
+  ble_ota_host.py                  上位机 CLI（scan/info/flash --dry-run/--mac；BleakOtaClient 协议状态机：Start/Stop ACK、sector 分包+尾包0xFF+CRC、ACK 超时重发、0x0002 跳 sector 断点续传；协议契约以源码核实为准——ACK 20B 无 cmd_echo、CRC=XMODEM 变体 init 0x0000、特征仅 WRITE-with-response）
 tools/
   wslbuild.sh                      WSL 一键构建/烧录脚本（rsync→~/c6src 原生构建→产物回拷，规避 ERR-001）
 ```
