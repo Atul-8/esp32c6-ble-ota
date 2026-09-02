@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 /* 固件版本（与根 CMakeLists.txt PROJECT_VER 同步维护） */
-#define OTA_APP_VERSION          "1.0.0"
+#define OTA_APP_VERSION          "1.0.1"
 
 /* BLE 广播名（MAC 后 4 位 1128；组件硬编码 "nimble-ble-ota"，app 在 host_init 后覆盖） */
 #define OTA_BLE_DEVICE_NAME      "C6-OTA-1128"

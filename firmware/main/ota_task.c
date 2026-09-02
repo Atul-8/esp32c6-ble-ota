@@ -107,8 +107,8 @@ void ota_task(void *arg)
         if (item_size != 0) {
             if (esp_ota_write(s_out_handle, (const void *)data, item_size) != ESP_OK) {
                 ESP_LOGE(TAG, "esp_ota_write failed");
-                xSemaphoreGive(notify_sem);
                 vRingbufferReturnItem(s_ringbuf, (void *)data);
+                xSemaphoreGive(notify_sem);
                 goto OTA_ERROR;
             }
             recv_len += item_size;
@@ -132,8 +132,11 @@ void ota_task(void *arg)
             }
         } else {
             vRingbufferReturnItem(s_ringbuf, (void *)data);
-            xSemaphoreGive(notify_sem);
         }
+        /* ERR-009 修复：正常路径循环体末尾无条件 give（对齐 example ota_task）。
+         * count 恒为 0/1，绝不累积：失败/完成路径的额外 give 只发生在任务
+         * 即将退出（break/goto）时，此后循环不再运行。 */
+        xSemaphoreGive(notify_sem);
     }
 
     if (esp_ota_end(s_out_handle) != ESP_OK) {

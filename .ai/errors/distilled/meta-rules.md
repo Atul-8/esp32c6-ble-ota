@@ -59,3 +59,15 @@
 - **关联专家(applies_to)**: pc-host-engineer, embedded-firmware-engineer
 - **触发关键词(keywords)**: ACK, CRC16, XMODEM, 全零帧, 坏帧误判, 固定头, 回显 sector, 帧格式, 协议联调
 - **embedding**: (预留)
+
+### META-006-CONCURRENCY: example 的信号量 take/give 配对是组件回路的隐式协议，移植必须逐路径保全
+
+- **规则**: 从官方 example 移植"信号量包裹临界段"的循环体时，take/give 配对是流水线两端共同依赖的隐式协议：正常迭代路径必须在循环体末尾无条件 give，任何一条路径（continue/break/goto/错误分支）丢失 give 都会让 count 单调泄漏，最终把生产者-消费者两端任务先后永久阻塞。症状特征：消费任务先死于自体 take（日志停在中途），生产者随后死于队满的 portMAX_DELAY send（对端表现为"最后一包 Unreachable"），全程无 panic、WDT 不复位、广播不恢复。互斥用法下动态 count 恒在 0/1 值域——count 单调递减即为泄漏
+- **适用场景**: example 移植、生产者-消费者 ringbuf 流水线、组件与应用共享同步原语（如 ble_ota 的 notify_sem 同时被组件 Stop 处理器 take，META-001 隐式契约）
+- **源错误**: ERR-009（ota_task.c 移植时丢失 example 循环末尾的无条件 give：ota_task 处理完 sector 0 后永久阻塞在自体 take → ringbuf 塞满 → NimBLE host 任务阻塞在 xRingbufferSend(portMAX_DELAY) → BLE 链路无应答、不广播，仅硬复位可恢复）
+- **检查方式**: 代码审查循环内每个 take：从循环入口到每个出口（含 goto）逐路径核对 give 可达；diff 对照 example 时把同步原语语句逐行对齐；审查"互斥信号量"的动态 count 是否可能脱离 0/1 值域
+- **类别(category)**: CONCURRENCY
+- **关联层(layer)**: core, interface
+- **关联专家(applies_to)**: embedded-firmware-engineer
+- **触发关键词(keywords)**: 信号量泄漏, notify_sem, take/give 配对, 静默挂死, 任务阻塞, example 移植, 组件契约, portMAX_DELAY, 死锁
+- **embedding**: (预留)

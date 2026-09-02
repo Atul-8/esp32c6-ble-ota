@@ -21,16 +21,17 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
 - [x] **固件修复 ERR-006** ✓ 完成（embedded-firmware-engineer 2026-09-02）：ble_ota v0.1.17 vendor 至 firmware/components/ble_ota，设备名走 CONFIG_BLE_OTA_DEVICE_NAME="C6-OTA-1128"（Kconfig），app_main 事后覆盖删除；构建零错误 + 烧录成功，bin strings 仅含 C6-OTA-1128；**空口广播名待 PM 手动 RST 后 Windows 扫描确认**
 - [ ] TASK-003 收尾：固件修复后跑一次真实 .bin 全链路传输（上位机侧已就绪，期望进度条+断电续传+reboot 检测全链路验证）
 - [x] **TASK-003/FIX 上位机 ERR-008 修复 ✓ 完成**（pc-host-engineer 2026-09-02）：RECV_FW sector ACK 无固定头（frame[0:2]=回显 sector），host 误用 COMMAND ACK 的 0x0003 头判定导致 sector 0 全零成功帧（CRC(18×00)=0x0000 自洽）被拒。已改为 len==20+CRC 自校验 + 修正 docstring + waiter 异常回收硬化。[验证: 协议单测✓ 真机 sector 0/1/2 ACK 接受✓ presentation(CLI 实跑)✓]
-- [ ] **TASK-004 全链路 BLE OTA 联调——当前阻塞项为固件侧 ERR-009**（2026-09-02）：传输推进到 sector 2-3 时设备在 sector 落盘时机硬挂死（不广播/串口静默/无 panic/WDT 不复位，仅 esptool 硬复位可恢复；两次复现，证据见 errors/raw/ERR-009.md）。上位机侧已就绪，待 embedded-firmware-engineer 排查落盘路径与断连处理
+- [ ] **TASK-004 全链路 BLE OTA 联调**（2026-09-02）：**固件侧 ERR-009 已修复并通过全链路回归**——161 sectors / 656,720B 45.9s（14 KB/s）传完，esp_ota_end+set_boot+reboot，设备重启后重新广播（OTA SUCCESS，packets=1443 jumps=0 reconnects=0 tail_retries=0）。**新镜像现运行于 ota_1（PENDING_VERIFY）**——下次重启若不确认会回滚 ota_0，属预期（issue #2 回滚机制）
+- [x] **固件修复 ERR-009** ✓ 完成 + 真机回归通过（embedded-firmware-engineer 2026-09-02）：根因 = ota_task.c 移植丢失 example 主循环末尾的无条件 xSemaphoreGive，count 逐 sector 泄漏 → ota_task 第 2 个 sector 后阻塞在自体 take → ringbuf 塞满 → NimBLE host 任务冻死在 xRingbufferSend(portMAX_DELAY) → 尾包 write 无应答（Unreachable）、无 panic、不广播。修复：循环末尾无条件 give + 失败路径还 item→give→goto。复现 2 次挂死点一致（sector 2 ACK 日志后静默）。详见 errors/raw/ERR-009.md + META-006-CONCURRENCY | [验证: shared- core- interface(全链路真机✓) presentation(CLI 实跑✓)]
 - [注意] 烧录后需手动按 RST 键启动 app（ERR-003: usbipd 虚拟复位不可信）
 - [注意] GitHub 推送需走代理 `git -c http.proxy=http://127.0.0.1:7890 push github master`（系统代理 ProxyEnable=0，直连被重置）
 - [注意] 上位机：ERR-006 已修复（广播名 C6-OTA-1128），待 PM 空口确认后 scan 名字过滤可恢复；联调前仍可用 `--mac 14:C1:9F:E5:11:2A`
 - [注意] components/ble_ota 为本地 vendor 组件（v0.1.17 + 设备名 patch），勿再从 main/idf_component.yml 声明 espressif/ble_ota（会与本地组件重名冲突）；升级组件时重新 vendor 并重打 patch
 
 ## 上次中断点
-- 文件: host/ble_ota_host.py（send_sector 帧校验，ERR-008 已修复）+ firmware 侧 ERR-009 挂死待查
-- 操作: ERR-008 修复完成并真机验证（sector 0/1/2 ACK 全部接受）；ERR-009 证据收集完成（设备已 esptool 硬复位恢复广播，勿再误判设备丢失）
-- 待恢复: 固件侧排查 ERR-009（sector 落盘挂死，建议顺序：任务 WDT 覆盖 → esp_ota_write 调用上下文与 flash 总线竞争 → BLE_GAP_EVENT_DISCONNECT 后是否重启广播）→ 恢复后重跑 `python ble_ota_host.py flash ../firmware/build/esp32c6_ble_ota.bin --mac 14:C1:9F:E5:11:2A`（161 sectors，上位机侧已就绪）
+- 文件: firmware/main/ota_task.c（ERR-009 已修复并回归通过）
+- 操作: 复现 2 次 → 修复（主循环末尾无条件 give）→ 构建烧录 → **全链路回归 PASS**（161 sectors 45.9s，reboot 后重新广播；注意：本次回归跑的是烧录态 ota_0 上 OTA 到 ota_1，现运行于 ota_1 PENDING_VERIFY）
+- 待恢复: PM 编排 TASK-004 收尾——复跑一次全链路（当前 ota_1 → ota_0 反向）验证续传/reboot 检测；留意 PENDING_VERIFY 回滚语义对测试顺序的影响；.ai 变更未 commit/push
 
 ## 环境事实
 - ESP-IDF: v6.0.2 @ WSL `/root/esp/v6.0.2/esp-idf`
