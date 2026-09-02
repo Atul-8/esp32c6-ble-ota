@@ -154,11 +154,20 @@ class BleakOtaClient:
     Threading model: everything on one asyncio loop. Indications arrive in
     notify callbacks and are demultiplexed by characteristic into pending
     asyncio.Future objects (worker-less, callback-driven).
+
+    Event hook: ``event_cb(event: str, data: dict)`` is invoked (synchronously,
+    on the asyncio loop thread) for notable protocol events so embedders (GUI)
+    can visualize them; CLI keeps its prints. Events:
+      start_ack, stop_ack, stop_timeout, packet, sector_sent, sector_ack,
+      sector_jump, ack_timeout, ack_bad_frame, ack_crc_mismatch, ack_unknown,
+      mtu, connect_fail_retry, reconnect_exhausted
     """
 
-    def __init__(self, verbose: bool = False) -> None:
+    def __init__(self, verbose: bool = False,
+                 event_cb=None) -> None:
         self.client: Optional[BleakClient] = None
         self.verbose = verbose
+        self.event_cb = event_cb
         # pending futures keyed by characteristic uuid
         self._pending: Dict[str, asyncio.Future] = {}
         self.mtu_size = 23
@@ -170,6 +179,16 @@ class BleakOtaClient:
             "tail_retries": 0,       # tail packet retransmits
             "reconnects": 0,
         }
+
+    def emit(self, event: str, **data) -> None:
+        """Notify the embedder about a protocol event (never raises)."""
+        cb = self.event_cb
+        if cb is None:
+            return
+        try:
+            cb(event, data)
+        except Exception:
+            pass  # a broken observer must not kill the transfer
 
     # -- low level ---------------------------------------------------------
 
@@ -191,6 +210,7 @@ class BleakOtaClient:
         await self.client.start_notify(RECV_FW_UUID, self._on_recv_fw_ack)
         await self.client.start_notify(COMMAND_UUID, self._on_cmd_ack)
         self._vlog("connected, mtu=%d" % self.mtu_size)
+        self.emit("mtu", mtu=self.mtu_size)
 
     async def disconnect(self) -> None:
         if self.client and self.client.is_connected:
@@ -260,7 +280,9 @@ class BleakOtaClient:
             raise BleakError("Start ACK status=0x%04x (expected 0x0001)" % status)
         if not verify_ack_crc(frame):
             print("[W] Start ACK CRC mismatch (proceeding)")
+            self.emit("ack_crc_mismatch", kind="start", frame=frame.hex())
         self._vlog("Start ACK ok: %s" % frame.hex())
+        self.emit("start_ack", frame=frame.hex())
 
     async def send_stop(self) -> None:
         """Write Stop command and wait for command ACK (status 0x0002)."""
@@ -273,6 +295,7 @@ class BleakOtaClient:
             # device may reboot immediately after last sector; Stop ACK is
             # best-effort
             print("[W] Stop ACK timeout (device may be rebooting)")
+            self.emit("stop_timeout")
             return
         except BaseException:
             waiter.cancel()
@@ -283,6 +306,7 @@ class BleakOtaClient:
             raise
         status = struct.unpack_from("<H", frame, 2)[0] if len(frame) >= 4 else -1
         self._vlog("Stop ACK: %s" % frame.hex())
+        self.emit("stop_ack", status=status)
         if status != ACK_CMD_STATUS_STOP_OK:
             print("[W] Stop ACK status=0x%04x (expected 0x0002)" % status)
 
@@ -334,6 +358,7 @@ class BleakOtaClient:
             await self.client.write_gatt_char(RECV_FW_UUID, pkt,
                                               response=WRITE_WITH_RESPONSE)
             self.stats["packets_sent"] += 1
+            self.emit("packet", pkt=self.stats["packets_sent"])
 
     async def send_sector(self, sector_index: int, fw: bytes,
                           max_jumps: int = 8) -> int:
@@ -355,6 +380,7 @@ class BleakOtaClient:
         """
         for _ in range(max_jumps):
             packets = self.plan_sector_packets(sector_index, fw)
+            self.emit("sector_sent", sector=sector_index, packets=len(packets))
             attempt = 0
             while True:
                 # arm the ACK waiter BEFORE the tail write: the indication
@@ -374,6 +400,8 @@ class BleakOtaClient:
                             % (sector_index, ACK_RETRIES))
                     print("\n[W] sector %d ACK timeout (attempt %d/%d), resending"
                           % (sector_index, attempt, ACK_RETRIES))
+                    self.emit("ack_timeout", sector=sector_index,
+                              attempt=attempt, retries=ACK_RETRIES)
                     continue
                 except BaseException:
                     # see send_start: cancel and retrieve the waiter outcome
@@ -387,12 +415,15 @@ class BleakOtaClient:
             if len(frame) != ACK_FRAME_LEN:
                 print("\n[W] sector ACK bad frame (len=%d): %s"
                       % (len(frame), frame.hex()))
+                self.emit("ack_bad_frame", sector=sector_index, frame=frame.hex())
                 continue
             if not verify_ack_crc(frame):
                 # CRC is the sole frame-validity test; an all-zero frame is
                 # self-consistent (CRC16 of 18 zero bytes == 0x0000) and
                 # passes, so only a genuine CRC mismatch is rejected here.
                 print("\n[W] sector ACK CRC mismatch, resending: %s" % frame.hex())
+                self.emit("ack_crc_mismatch", kind="sector",
+                          sector=sector_index, frame=frame.hex())
                 continue
             status, extra = struct.unpack_from("<HH", frame, 2)
             echoed = struct.unpack_from("<H", frame, 0)[0]
@@ -402,15 +433,18 @@ class BleakOtaClient:
                                % (echoed, sector_index))
                 self.last_acked_sector = max(self.last_acked_sector, sector_index)
                 self.stats["sectors_done"] += 1
+                self.emit("sector_ack", sector=sector_index, status=status)
                 return sector_index
             if status == ACK_FW_STATUS_SECTOR_ERR:
                 expected = extra
                 print("\n[W] device expects sector %d (we sent %d), jumping"
                       % (expected, sector_index))
                 self.stats["sector_jumps"] += 1
+                self.emit("sector_jump", sent=sector_index, expect=expected)
                 sector_index = expected
                 continue
             print("\n[W] sector ACK unknown status 0x%04x" % status)
+            self.emit("ack_unknown", sector=sector_index, status=status)
         raise AckTimeout("sector redirect loop (>%d jumps)" % max_jumps)
 
 
@@ -437,21 +471,17 @@ async def cmd_scan(timeout: float = SCAN_TIMEOUT_S) -> int:
     project notes) so the operator can identify the target by MAC instead.
     """
     print("Scanning for %ds (filter prefix %s)..." % (timeout, DEVICE_NAME_PREFIX))
-    found = await BleakScanner.discover(timeout=timeout, return_adv=True)
-    rows = []
-    for d, adv in found.values():
-        # prefer adv payload name (stable across stacks), fall back to d.name
-        name = adv.local_name or d.name or ""
-        if name.startswith(DEVICE_NAME_PREFIX) or name == "nimble-ble-ota":
-            rows.append((name, d.address, adv.rssi))
+    rows = await scan_devices(timeout)
     if not rows:
         print("[!] no %s* devices found. Check: device powered/adv, radio on."
               % DEVICE_NAME_PREFIX)
         return 1
-    rows.sort(key=lambda r: r[0])
     print("%-20s %-17s %s" % ("Name", "Address", "RSSI"))
-    for name, addr, rssi in rows:
-        print("%-20s %-17s %s" % (name, addr, ("%d dBm" % rssi) if rssi is not None else "n/a"))
+    for row in rows:
+        rssi = row["rssi"]
+        print("%-20s %-17s %s"
+              % (row["name"], row["address"],
+                 ("%d dBm" % rssi) if rssi is not None else "n/a"))
     print("total: %d device(s)" % len(rows))
     return 0
 
@@ -482,6 +512,23 @@ async def cmd_info(name_prefix: str, mac: Optional[str] = None) -> int:
                     except Exception as exc:
                         print("    desc 0x%04x %s = <read fail: %s>" % (desc.handle, desc.uuid, exc))
     return 0
+
+
+async def scan_devices(timeout: float = SCAN_TIMEOUT_S) -> List[Dict]:
+    """Scan and return OTA-capable advertisers as dicts.
+
+    Each row: {name, address, rssi}. Matches the C6-OTA- prefix plus the
+    component's hardcoded fallback name 'nimble-ble-ota' (see project notes).
+    Shared by CLI scan and the GUI device list.
+    """
+    found = await BleakScanner.discover(timeout=timeout, return_adv=True)
+    rows: List[Dict] = []
+    for d, adv in found.values():
+        name = adv.local_name or d.name or ""
+        if name.startswith(DEVICE_NAME_PREFIX) or name == "nimble-ble-ota":
+            rows.append({"name": name, "address": d.address, "rssi": adv.rssi})
+    rows.sort(key=lambda r: r["name"])
+    return rows
 
 
 async def find_device(name_prefix: str, mac: Optional[str] = None) -> Optional[str]:
@@ -534,8 +581,10 @@ async def run_flash(fw_path: str, name: str, mac: Optional[str],
                 if reconnect_budget < 0:
                     print("[E] connect failed repeatedly: %s" % exc)
                     print("[!] if the device rebooted, wait 3-5s for adv and retry flash")
+                    ota.emit("reconnect_exhausted", error=str(exc))
                     return 1
                 print("[W] connect failed (%s), retrying once..." % exc)
+                ota.emit("connect_fail_retry", error=str(exc))
                 await asyncio.sleep(2.0)
 
         print("connected. mtu=%d" % ota.mtu_size)

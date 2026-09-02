@@ -71,3 +71,27 @@
 - **关联专家(applies_to)**: embedded-firmware-engineer
 - **触发关键词(keywords)**: 信号量泄漏, notify_sem, take/give 配对, 静默挂死, 任务阻塞, example 移植, 组件契约, portMAX_DELAY, 死锁
 - **embedding**: (预留)
+
+### META-007-BUILD: 构造函数/初始化路径修改后必须立即实例化冒烟；方法中部锚定编辑必查方法尾部完整性
+
+- **规则**: 两条互补纪律。① 对既有方法做文本替换编辑时，old_string 锚点必须覆盖完整方法边界（def 行到方法最后一行），禁止在方法体中部锚定——锚点之后、下一方法之前的原方法体行会被新内容"吸收"进错误的作用域；② 任何触及构造函数/模块级初始化路径的修改，回归必须在改动后立即执行最小实例化冒烟（构造对象 + 调用一个触及全部新初始化属性的方法），不得攒批到最后统一验证
+- **适用场景**: 重构类构造函数、给 __init__ 加参数、编辑工具做方法级替换、任何"在方法间插入新方法"的改动
+- **源错误**: ERR-010（重构 BleakOtaClient.__init__ 加 event_cb 时，尾部 _pending/mtu_size/stats 初始化行被吸收进新插入的 emit() 方法体，属性构造后缺失，真机 dry-run 才暴露）
+- **检查方式**: 审查 diff：新增方法的上一行必须是完整初始化行集，原构造函数尾部行未位移；改动后立即 `python -c "import X; X.Y()"` 级别冒烟，验证 hasattr 或构造后首方法不 AttributeError
+- **类别(category)**: BUILD
+- **关联层(layer)**: core, interface
+- **关联专家(applies_to)**: pc-host-engineer, embedded-firmware-engineer
+- **触发关键词(keywords)**: 构造函数, __init__, 重构, Edit 锚点, 方法吸收, AttributeError, 实例化冒烟, 初始化缺失
+- **embedding**: (预留)
+
+### META-008-CONCURRENCY: tkinter 资产仅主线程可触碰，worker 任务签名必须是纯数据
+
+- **规则**: "主线程 UI + worker 线程"架构中，tkinter Variable/控件/Text 等资产与 UI 线程的 Tcl 解释器绑定，跨线程调用直接抛 `RuntimeError: main thread is not in main loop`（不是竞态，是根本禁止）。投递给 worker 的闭包/回调必须在投递方（主线程）就地解包为纯 Python 值（bool/str/dict），worker 侧禁止出现任何 `.get()`/`.cget()`/控件方法；反向更新只走队列轮询或 `after()`。类似约束同样适用于 Tk 主循环未运行时（`update()` 泵模型）跨线程访问
+- **适用场景**: tkinter/PySimpleGUI 等 GUI 与 asyncio/线程 worker 混合的上位机；任何"UI 线程 + 后台任务"参数传递
+- **源错误**: ERR-011（ble_ota_gui.py on_start 闭包内 dry_var.get()，worker 线程执行时崩溃，烧录启动即失败）
+- **检查方式**: 审查 worker.post/submit 调用：闭包体引用的每个名字是否为主线程快照的纯值？grep worker 执行路径上的 tkinter 方法调用（Variable.get、控件 config 等）；GUI 集成必须做一次 headless 驱动冒烟（模拟按钮回调 + update() 泵）验证线程边界
+- **类别(category)**: CONCURRENCY
+- **关联层(layer)**: presentation, interface
+- **关联专家(applies_to)**: pc-host-engineer
+- **触发关键词(keywords)**: tkinter, Variable.get, 跨线程, main thread is not in main loop, GUI worker, 线程边界, 队列轮询, headless 冒烟
+- **embedding**: (预留)

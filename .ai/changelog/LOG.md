@@ -44,3 +44,6 @@
 - 10:50 [验证] ERR-009 修复后全链路回归 PASS：烧录态直接推送（未手动 RST，本次 hard reset 生效），161 sectors/656,720B/45.9s（14 KB/s）传完，设备 esp_restart 后 3-5s 内重新广播（OTA SUCCESS, packets=1443 jumps=0 reconnects=0 tail_retries=0）；现运行于 ota_1（PENDING_VERIFY）
 - 10:35 [完成] 真机验证升级结果：App version=1.0.1 @ ota_1, img_state=VALID（回滚确认过），ota_task target=ota_0 槽位交替，resume info 清零 → TASK-004 完结
 - 10:40 [完成] G4 收尾：WORKSTATE 重构为任务全完成态 + 错误索引；全部成果推送 github(代理)/gitee（c82cde1）
+- 11:00 [完成] 中断续作：修 ble_ota_gui.py 残缺（_hide_tip 行/:171 坏 event_cb 表达式/补齐整个 OtaGui 类+Worker cancel 入口），py_compile+import+UI 冒烟过 (host/ble_ota_gui.py)
+- 11:30 [修复] ERR-011 worker 线程读 tkinter Variable 崩溃 → on_start 主线程快照参数；提炼 META-008 (host/ble_ota_gui.py, errors/raw/ERR-011.md, meta-rules.md)
+- 11:50 [完成] 真机 headless 全流程 PASS：161 sectors/1443 packets/44.7s/0 错误，事件流断言+热力图全绿+reboot_ok；CLI --help/scan/dry-run 回归全绿；临时驱动脚本已删；TASK-002 完成 (host/)

@@ -4,6 +4,10 @@
 ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Windows 上位机测试工具
 
 ## 任务状态（全部完成 ✓）
+- [TASK-002@任务表] GUI 可视化测试工具（host/ble_ota_gui.py）**✓** | 2026-09-02:
+  修复中断残缺（_hide_tip 残行 / :171 坏 event_cb 表达式 / 补齐缺失的 OtaGui 类）；
+  真机 headless 全流程 PASS：scan→select→flash 161 sectors / 1443 packets / 44.7s /
+  0 重传 0 跳转 0 重连，reboot_ok 确认；CLI --help/scan/dry-run 回归全绿
 - [TASK-001] hello_world 跑通 **✓** | 2026-09-01：构建烧录运行全过
 - [TASK-002] BLE OTA 固件 **✓** | 2026-09-02：三层代码 + vendor 组件 + 回滚 + 进度持久化；真机锚点全命中
 - [TASK-003] Windows 上位机 **✓** | 2026-09-02：Bleak CLI（scan/info/flash），真机 dry-run + 真实传输全过
@@ -20,9 +24,9 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
 - [注意] components/ble_ota 为本地 vendor 组件（v0.1.17 + 设备名 Kconfig patch），勿在 main/idf_component.yml 重新声明 espressif/ble_ota（重名冲突）；升级组件需重新 vendor
 
 ## 上次中断点
-- 文件: （无未完成编码）
-- 操作: TASK-004 完结，全链路真机验证通过，成果已推送双平台（c82cde1）
-- 待恢复: 用户可随时继续遗留优化项（速率/回滚实战/文档），或开新需求
+- 文件: 无（TASK-002 全部收口）
+- 操作: GUI 可视化测试台完成。真机 headless 驱动走完 scan→select→flash 全流程（161 sectors / 44.7s / 全 0 错误），GUI 事件流断言全过（sector_ack 顺序 0..160、progress 推进、done+reboot_ok、热力图全绿、banner SUCCESS）
+- 待恢复: 无阻塞。可选后续见"遗留优化项"
 
 ## 环境事实
 - ESP-IDF: v6.0.2 @ WSL `/root/esp/v6.0.2/esp-idf`

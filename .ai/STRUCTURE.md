@@ -19,7 +19,8 @@ firmware/                          ESP32-C6 固件（七层分治映射见下）
   components/ota_shared/           shared 层：ota_version.h（版本/设备名/sector 常量）+ ota_nvs_keys.h（NVS 命名空间/键名），纯宏无代码
   components/ota_core/             core 层：ota_rollback.c（自检+PENDING_VERIFY 确认/回滚）、ota_progress_store.c（NVS blob 进度存取），0 个 ESP_LOG/printf
 host/
-  ble_ota_host.py                  上位机 CLI（scan/info/flash --dry-run/--mac；BleakOtaClient 协议状态机：Start/Stop ACK、sector 分包+尾包0xFF+CRC、ACK 超时重发、0x0002 跳 sector 断点续传；协议契约以源码核实为准——ACK 20B 无 cmd_echo、CRC=XMODEM 变体 init 0x0000、特征仅 WRITE-with-response）
+  ble_ota_host.py                  上位机 CLI（scan/info/flash --dry-run/--mac；BleakOtaClient 协议状态机：Start/Stop ACK、sector 分包+尾包0xFF+CRC、ACK 超时重发、0x0002 跳 sector 断点续传；协议契约以源码核实为准——ACK 20B 无 cmd_echo、CRC=XMODEM 变体 init 0x0000、特征仅 WRITE-with-response；event_cb 事件回调 + emit() 供 GUI 挂接，CLI 行为不变）
+  ble_ota_gui.py                   tkinter 可视化测试台（复用 ble_ota_host 协议核心，不重复协议逻辑；OtaWorker：asyncio loop 线程持有全部 BLE I/O，事件经 queue.Queue 由 root.after(60ms) 轮询泵入 UI 线程，GUI→worker 走 call_soon_threadsafe 且参数为主线程快照纯值（ERR-011）；OtaGui：深色工程主题 1180x760——工具栏扫描/设备列表/固件选择/dry-run、161 格 sector 热力图（状态着色+悬停 tooltip+脉冲）、进度条/速率/ETA/统计（packets/跳转/重发/重连/MTU）、事件日志（时间戳+verbose）、结果横幅+开始/停止；停止为协作式取消（sector 边界检查）
 tools/
   wslbuild.sh                      WSL 一键构建/烧录脚本（rsync→~/c6src 原生构建→产物回拷，规避 ERR-001）
 ```
