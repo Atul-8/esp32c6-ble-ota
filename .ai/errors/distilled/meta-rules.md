@@ -47,3 +47,15 @@
 - **关联专家(applies_to)**: embedded-firmware-engineer, pc-host-engineer
 - **触发关键词(keywords)**: fw_length, 缓存, 跨任务, happens-before, ota_task, example 移植, 时序屏障
 - **embedding**: (预留)
+
+### META-005-DATA_INTEGRITY: ACK 帧合法性只能由自校验字段判定，禁止外观检查（非零/固定头）
+
+- **规则**: 解析带校验和的应答帧时，帧有效性判定只能依赖与载荷绑定的自校验字段（CRC、长度、magic 与载荷的绑定关系）；禁止用"字节非零""与载荷无关的固定头值"等外观检查。存在全零/全 0xFF 合法帧的协议中（如零填充 ACK 且 CRC(全零)=0），"看起来像坏帧"的帧必须先过 CRC 再下结论。同一协议不同通道的帧格式（有无帧头）必须分别核对源码，禁止由一个通道的格式泛化另一个
+- **适用场景**: 任何带尾部 CRC 的二进制 ACK/应答帧解析；上位机/下位机协议对接联调
+- **源错误**: ERR-008（ble_ota RECV_FW sector ACK 无固定头、frame[0:2]=回显 sector；上位机误用 COMMAND ACK 的 0x0003 头检查，sector 0 全零成功 ACK 被拒→重发→传输中止）
+- **检查方式**: 代码审查 ACK 解析分支：是否只出现 len + CRC 判定？是否存在与 CRC 并列的"magic/非零"判定？对每个判定构造极端帧（全零、全 FF、CRC 破坏）做单测；核对协议两端源码逐字节填充位置（含"回显值 vs 期望值"语义）
+- **类别(category)**: DATA_INTEGRITY
+- **关联层(layer)**: interface, core
+- **关联专家(applies_to)**: pc-host-engineer, embedded-firmware-engineer
+- **触发关键词(keywords)**: ACK, CRC16, XMODEM, 全零帧, 坏帧误判, 固定头, 回显 sector, 帧格式, 协议联调
+- **embedding**: (预留)

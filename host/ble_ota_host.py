@@ -20,25 +20,33 @@ Protocol contract verified line-by-line against nimble_ota.c (ble_ota v0.1.17):
     Stop:  02 00                   (2 bytes)
 
   ACK frames (20 bytes, sent as Indication on the matching char):
-    frame[0:2] = 0x0003 fixed header
-    frame[2:4] = status
-    frame[4:6] = extra
-    frame[18:20] = CRC16 over bytes 0..17 (bitwise crc16_ccitt from source:
-                   poly 0x1021, init 0x0000 -- the XMODEM variant, NOT
-                   CCITT-FALSE 0xFFFF)
+    NOTE: the 0x0003 fixed header exists ONLY on COMMAND ACKs. The RECV_FW
+    sector ACK has NO fixed header -- frame[0:2] is the echoed sector index.
+    Frame validity is judged by CRC16 alone (crc16_ccitt, poly 0x1021 init
+    0x0000 -- the XMODEM variant, NOT CCITT-FALSE 0xFFFF), never by
+    "non-zero bytes": the success ACK for sector 0 is 20 zero bytes
+    (echo=0, status=0, zero pad, CRC16(18 x 0x00) == 0x0000) and is legal
+    (nimble_ota.c:187 zero-init + :390..399 success path).
 
-    COMMAND ACK:
+    COMMAND ACK (has 0x0003 header at frame[0:2]):
       Start ok -> status = 0x0001           (nimble_ota.c: cmd_ack[2]=0x01)
       Stop  ok -> status = 0x0002           (cmd_ack[2]=0x02)
       (There is NO cmd_echo field in the 20-byte ACK.)
 
-    RECV_FW ACK (sector ACK):
-      success        -> frame[2:4]=0x0000, frame[0:2]=echo of the sector we
-                        just sent, frame[4:6]=0x0000
-      sector error   -> frame[2:4]=0x0002, frame[0:2]=echo of the sector we
-                        sent (may be garbage), frame[4:6]=cur_sector = the
+    RECV_FW ACK (sector ACK, no header):
+      frame[0:2] = echo of the sector index we just sent (LE)
+      frame[2:4] = status
+      frame[4:6] = extra
+      frame[18:20] = CRC16 over bytes 0..17
+      success        -> status=0x0000, extra=0x0000
+                        (nimble_ota.c sector_end, :390..399)
+      sector error   -> status=0x0002, frame[0:2]=echo of the sector we sent
+                        (NOT the expected one), frame[4:6]=cur_sector = the
                         sector the device expects -> jump there and restart
-                        that sector from packet 0 (device resets its buffer).
+                        that sector from packet 0 (device resets its buffer
+                        and seq, nimble_ota.c:202..217). Same frame is also
+                        used for "retry sector" after a packet sequence
+                        error (:232..244) and decrypt failure (:353..362).
       packet seq err -> device silently drops the packet and sends NO ack;
                         our sector-end ACK timeout covers recovery.
 
@@ -236,8 +244,14 @@ class BleakOtaClient:
                                               response=WRITE_WITH_RESPONSE)
             frame = await waiter
         except BaseException:
-            if not waiter.done():
-                waiter.cancel()
+            # cancel AND retrieve the waiter outcome: on a lost link the
+            # abandoned waiter would otherwise die with an unretrieved
+            # TimeoutError ("Task exception was never retrieved" noise)
+            waiter.cancel()
+            try:
+                await waiter
+            except BaseException:
+                pass
             raise
         if len(frame) < 6 or struct.unpack_from("<H", frame, 0)[0] != ACK_HEADER:
             raise BleakError("Start ACK bad frame: %s" % frame.hex())
@@ -261,8 +275,11 @@ class BleakOtaClient:
             print("[W] Stop ACK timeout (device may be rebooting)")
             return
         except BaseException:
-            if not waiter.done():
-                waiter.cancel()
+            waiter.cancel()
+            try:
+                await waiter
+            except BaseException:
+                pass
             raise
         status = struct.unpack_from("<H", frame, 2)[0] if len(frame) >= 4 else -1
         self._vlog("Stop ACK: %s" % frame.hex())
@@ -327,8 +344,10 @@ class BleakOtaClient:
 
         Pipeline strategy: packets of a sector are streamed back-to-back
         (write-with-response serializes at ATT level). After the tail packet
-        (seq 0xFF) we block on the sector ACK:
-          status 0x0000 -> sector done
+        (seq 0xFF) we block on the sector ACK. Frame validity = length 20 +
+        trailing CRC16 -- there is NO fixed header on this frame (unlike
+        COMMAND ACKs), and the all-zero success ACK for sector 0 is legal:
+          status 0x0000 -> sector done (frame[0:2] echoes the sector sent)
           status 0x0002 -> device expects cur_sector (frame[4:6]); the device
                            already reset its buffer, so we restart that
                            sector from packet 0 (bounded by max_jumps to
@@ -357,19 +376,31 @@ class BleakOtaClient:
                           % (sector_index, attempt, ACK_RETRIES))
                     continue
                 except BaseException:
-                    if not waiter.done():
-                        waiter.cancel()
+                    # see send_start: cancel and retrieve the waiter outcome
+                    waiter.cancel()
+                    try:
+                        await waiter
+                    except BaseException:
+                        pass
                     raise
                 break
-            if len(frame) < 6 or struct.unpack_from("<H", frame, 0)[0] != ACK_HEADER:
-                print("\n[W] sector ACK bad frame: %s" % frame.hex())
+            if len(frame) != ACK_FRAME_LEN:
+                print("\n[W] sector ACK bad frame (len=%d): %s"
+                      % (len(frame), frame.hex()))
                 continue
             if not verify_ack_crc(frame):
-                self._vlog("sector ACK CRC mismatch (accepted)")
+                # CRC is the sole frame-validity test; an all-zero frame is
+                # self-consistent (CRC16 of 18 zero bytes == 0x0000) and
+                # passes, so only a genuine CRC mismatch is rejected here.
+                print("\n[W] sector ACK CRC mismatch, resending: %s" % frame.hex())
+                continue
             status, extra = struct.unpack_from("<HH", frame, 2)
             echoed = struct.unpack_from("<H", frame, 0)[0]
             if status == ACK_FW_STATUS_SUCCESS:
-                self.last_acked_sector = max(self.last_acked_sector, echoed)
+                if echoed != (sector_index & 0xFFFF):
+                    self._vlog("sector ACK echo=%d != sent=%d (trusting sent)"
+                               % (echoed, sector_index))
+                self.last_acked_sector = max(self.last_acked_sector, sector_index)
                 self.stats["sectors_done"] += 1
                 return sector_index
             if status == ACK_FW_STATUS_SECTOR_ERR:
