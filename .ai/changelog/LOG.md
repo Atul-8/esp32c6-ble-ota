@@ -42,3 +42,5 @@
 - 10:35 [修复] ERR-009 固件修复：ota_task.c 主循环末尾无条件 give（失败路径顺序改为还 item→give→goto）；构建零错误 bin=656,720B 已烧录，真机回归归 TASK-004 (涉及文件: firmware/main/ota_task.c)
 - 10:36 [决策] ERR-009 根因模型精化：ota_task 阻塞前消费的 C0+C1 字节恰好腾出吸收 sector 1/2 的空间，sector 3 塞满 ringbuf → host 任务冻死在 xRingbufferSend(portMAX_DELAY)，尾包 write 无应答 → Unreachable；与 4 次复现（3 次 @sector3 尾包、1 次 @sector2 尾包，竞速差异）全部吻合；提炼 META-006-CONCURRENCY
 - 10:50 [验证] ERR-009 修复后全链路回归 PASS：烧录态直接推送（未手动 RST，本次 hard reset 生效），161 sectors/656,720B/45.9s（14 KB/s）传完，设备 esp_restart 后 3-5s 内重新广播（OTA SUCCESS, packets=1443 jumps=0 reconnects=0 tail_retries=0）；现运行于 ota_1（PENDING_VERIFY）
+- 10:35 [完成] 真机验证升级结果：App version=1.0.1 @ ota_1, img_state=VALID（回滚确认过），ota_task target=ota_0 槽位交替，resume info 清零 → TASK-004 完结
+- 10:40 [完成] G4 收尾：WORKSTATE 重构为任务全完成态 + 错误索引；全部成果推送 github(代理)/gitee（c82cde1）
