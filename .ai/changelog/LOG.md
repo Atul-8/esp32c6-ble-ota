@@ -52,3 +52,5 @@
 - 14:50 [完成] 问题沉淀收尾：META-007/008 回流全局（META-199/200）；审阅报告 3 P0 + 8 P1 + 8 P2 留档 .ai/docs/review-ota-20260902.md（P0 修复待用户决策）
 - 14:55 [修复] 全局仓库 META-189~200 补建 rules/ 单文件（此前只有汇总无单文件，v2 索引漏扫）；发现索引工具文件名正则 ASCII 限制，12 个中文命名文件改 ASCII slug，索引 207→219 条
 - 09:35 [完成] host/start_gui.bat 一键启动脚本：自动定位目录/bleak 缺失自装/错误暂停；实测启动 GUI 进程稳定。坑：bat 内 UTF-8 中文注释被 cmd 按 GBK 误解析成命令执行，必须纯 ASCII
+- TASK-004 [完成] HXD019EU 红外遥控芯片 UART 驱动库封装（REQ-003）：三组件 hxd019_shared/hxd019_core/hxd019（shared 帧构建纯函数+Kconfig+host 单测；core 精简码库索引+动态注册+会话状态机+F_code TODO 钩子；interface UART 57600-8N1+RX 任务+ESP_LOG 锚点）。金标准 host 复算 7/7 ALL PASS（含规则二 16B 校验和推导 0x97、IPTV 范例 0x2F、接口表 B 0x2E 复核）；主工程构建绿 + WSL 临时自测工程三组件编译链接全过（IDF v6 esp_driver_uart 拆分适配）；分层 grep 零违规。未接 main，未烧录（防覆盖 OTA 固件），联调疑点 5 条沉淀在 hxd019_shared/README.md (涉及: firmware/components/hxd019_shared/*, hxd019_core/*, hxd019/*)
+- TASK-004 [修复] IDF v6 构建适配：driver 组件拆分→PRIV_REQUIRES esp_driver_uart；uart_wait_tx_done_polling 不存在→uart_wait_tx_idle_polling；mut_temp 无效语句 -Werror（见 ERR-012） (涉及: hxd019/CMakeLists.txt, hxd019/src/hxd019_uart.c)

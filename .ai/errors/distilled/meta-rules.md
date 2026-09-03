@@ -95,3 +95,15 @@
 - **关联专家(applies_to)**: pc-host-engineer
 - **触发关键词(keywords)**: tkinter, Variable.get, 跨线程, main thread is not in main loop, GUI worker, 线程边界, 队列轮询, headless 冒烟
 - **embedding**: (预留)
+
+### META-009-BUILD: IDF v5→v6 迁移中 monolithic driver 组件已拆分，API 以目标版本头文件为准
+
+- **规则**: ESP-IDF v6 已把 `driver` 组件拆分为 esp_driver_uart/esp_driver_gpio/esp_driver_i2c 等，组件 CMakeLists 中 `REQUIRES/PRIV_REQUIRES driver` 不再覆盖 uart 等外设头；驱动 API 名（如 `uart_wait_tx_idle_polling` vs 想象中的 `uart_wait_tx_done_polling`）必须 grep 目标版本 IDF 组件源码确认后使用，禁止凭其他 SDK/旧版本记忆书写。跨大版本升级后组件首次参与编译要盯 -Werror 全清零
+- **适用场景**: ESP-IDF v6.x 新写/移植 UART/SPI/I2C/GPIO 组件；从 v4/v5 工程迁移驱动代码；新组件首次接入构建
+- **源错误**: ERR-012（hxd019 组件三连错：driver 拆分依赖缺失、uart API 名混淆、no-op 表达式语句触发 -Werror）
+- **检查方式**: 组件编译错误含 "provided by esp_driver_* component(s)" 时改 PRIV_REQUIRES；调用任何 uart_* 前先 `grep -rn "uart_wait\|uart_write_bytes" $IDF_PATH/components/esp_driver_uart/include`；代码审查 diff 中出现"表达式语句"（无赋值/无调用的纯成员访问）直接标红
+- **类别(category)**: BUILD
+- **关联层(layer)**: interface, core
+- **关联专家(applies_to)**: embedded-firmware-engineer
+- **触发关键词(keywords)**: IDF v6, driver 拆分, esp_driver_uart, PRIV_REQUIRES, uart_wait_tx_idle_polling, implicit declaration, -Werror, unused-value, 组件首次编译
+- **embedding**: (预留)

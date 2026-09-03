@@ -1,0 +1,55 @@
+menu "HXD019EU IR Remote UART Driver"
+
+    config HXD019_STATE_FMT_11KEY
+        bool "Use 11-key AC state frame (Rule 3, with sleep/aux-heat/light/eco)"
+        default n
+        help
+            空调完整状态帧格式（16B）：
+            n=7 键版（规则二）：状态段 7B + 固定尾 03 00 00 FF，键名仅 0x01-0x07
+            y=11 键版（规则三）：状态段 11B（多睡眠/辅热/灯光/节能），键名 0x01-0x0F
+            需与所用 HXD019EU 芯片码库版本匹配（DU/D 版=7 键，d/du 新库=11 键）。
+
+    config HXD019_TEMP_ENC_MINUS16
+        bool "11-key frame temp encoding = C-16 (d/du library variant)"
+        default n
+        depends on HXD019_STATE_FMT_11KEY
+        help
+            规则三 datasheet 注释："如果是用 d，du 的库，这个数据要减 16"。
+            默认关（字节 = 摄氏度，16C->0x10 ... 31C->0x1F）；
+            开启后 11 键帧温度字节 = 摄氏度 - 16。真机联调确认前保持默认。
+
+    config HXD019_UART_TX
+        int "HXD019 UART TX GPIO"
+        default 4
+        help
+            ESP32-C6 连接 HXD019EU 芯片 RXD 的 GPIO（57600bps 8N1）。
+
+    config HXD019_UART_RX
+        int "HXD019 UART RX GPIO"
+        default 5
+        help
+            ESP32-C6 连接 HXD019EU 芯片 TXD 的 GPIO（匹配/学习应答）。
+
+    config HXD019_UART_NUM
+        int "HXD019 UART port"
+        default 1
+        range 0 1
+        help
+            UART1（UART0 通常被 console 占用）。
+
+    config HXD019_RX_TASK_STACK
+        int "HXD019 RX task stack size"
+        default 3072
+
+    config HXD019_RX_TASK_PRIO
+        int "HXD019 RX task priority"
+        default 5
+
+    config HXD019_SELFTEST
+        bool "Build self-test entry (frame build golden checks, no hardware)"
+        default n
+        help
+            开启后组件内含 hxd019_selftest_run()（金标准帧构建自检，打印 PASS/FAIL），
+            需在 main 中显式调用（本工程 main 未引用，仅联调时临时接线用）。
+
+endmenu

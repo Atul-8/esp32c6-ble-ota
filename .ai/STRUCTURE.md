@@ -16,6 +16,9 @@ firmware/                          ESP32-C6 固件（七层分治映射见下）
     ota_task.c/.h                  ringbuf 解耦收包与落盘；每 sector 进度保存；esp_ota_begin/write/end→set_boot_partition→restart
     idf_component.yml              仅声明 idf（ble_ota 改本地 vendor，见 components/ble_ota）
   components/ble_ota/              ble_ota v0.1.17 本地 vendor（ERR-006）：patch nimble_ota.c 设备名走 CONFIG_BLE_OTA_DEVICE_NAME（Kconfig 新增，默认 nimble-ble-ota），自带 idf_component.yml 继续拉 cjson/esp_encrypted_img/cmake_utilities 依赖
+  components/hxd019_shared/        shared 层（HXD019EU 红外遥控，TASK-004）：hxd019_protocol.h（四发码规则帧头/功能码/键名/模式常量）、hxd019_types.h（16B 帧/空调状态/错误码）、hxd019_codelist.h（码库索引类型）、src/hxd019_frame.c（帧构建纯函数：5B 简单/16B 状态 7 或 11 键/10B AV/学习匹配/校验和，零硬件依赖）、test/host_test_hxd019.py（host 金标准单测，ALL PASS）、test/test_hxd019_frame.c（组件自测，CONFIG_HXD019_SELFTEST）、Kconfig（11 键帧格式/温度编码 d/du 减 16/UART 接线/自测）、README.md（金标准对照表+datasheet 疑点清单）
+  components/hxd019_core/          core 层：hxd019_codec.c（精简品牌索引：空调 4 体验版+6 常用、IPTV 前 8、TV 2 品牌；动态注册表 hxd019_codec_register_table 供 host/NVS 加载完整码库）、hxd019_session.c（绑定码组+空调状态缓存增量操作+F_code 特殊字节 TODO 钩子桩），0 个 ESP_LOG/printf/driver
+  components/hxd019/               interface 层：hxd019_uart.c（uart_driver_install 57600-8N1 + RX 任务匹配应答/学习数据 + ESP_LOG 锚点 [HXD019] tx frame/match result/learn data；便捷 API hxd019_ac_power/temp/mode/fan/swing/sleep...；hxd019_match 异步回调收码组号）；未接入 main（库只交付不启用，联调时 main REQUIRES 加 hxd019）
   components/ota_shared/           shared 层：ota_version.h（版本/设备名/sector 常量）+ ota_nvs_keys.h（NVS 命名空间/键名），纯宏无代码
   components/ota_core/             core 层：ota_rollback.c（自检+PENDING_VERIFY 确认/回滚）、ota_progress_store.c（NVS blob 进度存取），0 个 ESP_LOG/printf
 host/
@@ -28,6 +31,7 @@ tools/
 ## 固件依赖方向（严格单向）
 main → ota_core → ota_shared；main → ota_shared；main → ble_ota 组件（本地 vendor firmware/components/ble_ota，main/CMakeLists.txt 显式 REQUIRES）
 ota_core 禁止 include NimBLE/ble_ota/esp_log 头（构建后 grep 自查通过）
+hxd019 → hxd019_core → hxd019_shared（TASK-004，未接 main）；hxd019_private→esp_driver_uart（IDF v6 driver 拆分）；hxd019_shared/core 零 ESP_LOG/printf/driver 头（grep 自查通过，自测文件 Kconfig 关闭不编译）
 
 ## 关键机制
 - 回滚：CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE，新镜像首启 PENDING_VERIFY → ota_rollback_confirm()（BLE 初始化前，NVS 读写回路 + 堆>50KB 自检）→ 标记 VALID 或回滚重启
