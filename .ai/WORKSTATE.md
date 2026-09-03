@@ -29,19 +29,25 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
 - [注意] components/ble_ota 为本地 vendor 组件（v0.1.17 + 设备名 Kconfig patch），勿在 main/idf_component.yml 重新声明 espressif/ble_ota（重名冲突）；升级组件需重新 vendor
 
 ## 正在进行
-- 无（TASK-004 收口）
+- [REQ-004 PR-1 / TASK-005] ota_sink 抽象 + ble_transport 迁移 + epoch 会话修复（embedded-firmware-engineer）: 设计已读 100%，编码 0% | 上次更新: 2026-09-03
+  设计文档 `.ai/docs/design-ota-transport-abstraction.md` §B/§5.1/§7-PR1 为唯一权威
+  计划：ota_sink.h/.c（epoch/单写者/lazy-open 支撑）→ vendor 补丁（~25 行会话回调）→ ble_transport.c/.h（迁 ota_task.c）→ main.c 接线 → host P0-2 判定增强 → 构建+烧录+回归 A/B/C
+  [验证: shared✓(无变更) core✗ interface✗ presentation✗]
 
 ## 未完成队列
+- [ ] REQ-004 PR-1（待用户批准后实施）：ota_sink 抽象 + ble_transport 迁移 + P0-1 修复（epoch 机制），固件 ~660 行
+- [ ] REQ-004 PR-2：WiFi 通道（esp_http_client 流式 + esp_ota_resume Range 续传），固件 ~475 行
+- [ ] REQ-004 PR-3：USB 通道（USB-Serial/JTAG 自定义帧协议 + pyserial 上位机），固件 ~410 行
 - [ ] HXD019EU 真机联调（下轮）：接线 UART1 GPIO4/5 ↔ 芯片 57600-8N1；确认 README 疑点 2/3/4
-      （d/du 温度编码、匹配应答帧格式、F_code 特殊字节），确认后收紧 RX 解析与钩子实现
+      （d/du 温度编码���匹配应答帧格式、F_code 特殊字节），确认后收紧 RX 解析与钩子实现
 - [ ] 传输速率优化（遗留）：当前 14 KB/s（esp_ota_write 每包同步落盘 + NVS 每 sector commit）
 - [ ] issue #9 回滚实战测试（遗留）
 - [ ] issue #10 文档收尾（遗留）
 
 ## 上次中断点
-- 文件: firmware/components/hxd019/（TASK-004 全部收口）
-- 操作: 三组件交付完毕，验证全绿（host 单测/主工程构建/临时自测工程编译链接/分层 grep），.ai 已同步
-- 待恢复: 无阻塞。HXD019EU 真机接线联调见"未完成队列"首项
+- 文件: .ai/docs/design-ota-transport-abstraction.md（REQ-004 设计稿落盘完毕）
+- 操作: 设计定稿，关键纠偏——C6 无 USB-OTG/TinyUSB 不可行、USB 引脚 GPIO12/13、esp_ota_resume 可支撑 WiFi 续传、esp_https_ota 因无注入口否决
+- 待恢复: PM 向用户汇报设计结论并请求批准 → 批准后 PR-1 实施（任务拆分见设计文档 §7）
 
 ## 环境事实
 - ESP-IDF: v6.0.2 @ WSL `/root/esp/v6.0.2/esp-idf`

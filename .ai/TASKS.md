@@ -4,6 +4,7 @@
 > PM 用 `tasks.js` 维护；专家读取自己负责的任务（@expert）。
 
 ## 待办（pending）
+- [ ] TASK-005 [LAYERING] PR-1: ota_sink 抽象框架 + BLE transport 迁移 + epoch 会话修复 @embedded-firmware-engineer
 
 ## 进行中（doing）
 
