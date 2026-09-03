@@ -50,7 +50,7 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
 - 文件: firmware/main/ble_transport.c（ERR-013 修复版）/ host/ble_ota_host.py（广播空窗判定）
 - 操作: PR-1 全部交付并通过真机回归 A/B/C（B 首版暴露 ERR-013 三缺陷，修复后 D/G 两轮全绿）
 - 待恢复: 无阻塞——PR-2（WiFi）按设计文档 §5.2 实施，可直接复用 ota_sink（resume=true 路径）；
-  firmware/host 改动待 commit（主仓库）
+  固件/host 改动已随主仓库 6cbc6da 入库，github 推送待 PM（走代理）
 
 ## 环境事实
 - ESP-IDF: v6.0.2 @ WSL `/root/esp/v6.0.2/esp-idf`
