@@ -4,10 +4,8 @@
 > PM 用 `tasks.js` 维护；专家读取自己负责的任务（@expert）。
 
 ## 待办（pending）
-- [x] TASK-001 [BUILD] 创建git仓库+整理README+建立issue推动计划+同步创建gitee仓库（自建自推） @pm
-- [x] TASK-002 [TESTING] 上位机 GUI 可视化测试工具（tkinter，sector 热力图+协议日志+测试场景） @pc-host-engineer
-- [x] TASK-003 [TESTING] OTA 全链路功能审阅（固件+上位机 代码审查/边界/风险/测试覆盖） @code-reviewer
 
 ## 进行中（doing）
 
 ## 完成（done）
+- [x] TASK-004 [DEPENDENCY] HXD019EU 红外遥控芯片 UART 驱动库封装（协议帧构建/码库索引/分治分层） @embedded-firmware-engineer | 2026-09-03: 三组件交付，host 金标准 7/7 + 构建全绿 + 分层 grep 零违规（REQ-003）
