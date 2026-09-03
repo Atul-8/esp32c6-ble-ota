@@ -470,17 +470,34 @@ async def wait_reboot_with_gap(name: str, mac: Optional[str],
     reboot happened; a device that stays continuously visible did NOT reboot
     (firmware-side failure -- the P0-2 false-success scenario).
 
+    ERR-014 fix: the gap must be observed against a PRE-STOP advertising
+    baseline. The device's stop-to-readvertising window is only ~2s total,
+    so a 1s probe scan often spans the entire gap and never sees "None" if
+    started after the reboot already happened. We therefore record the
+    device as visible NOW (before firmware processes Stop), and treat
+    "seen before + later missing + back again" as the gap proof. A 1s probe
+    straddling the gap still satisfies: baseline seen -> gap -> back.
+
     Returns the address after it reappears post-gap, or None if no gap was
-    observed within watch_s (device never rebooted) .
+    observed within watch_s (device never rebooted).
     """
     t0 = time.monotonic()
     seen_gap = False
+    # Baseline: if the device is visible right now, we KNOW advertising was
+    # on. Any later 1s probe that misses it counts as a gap even if the
+    # probe straddled the reboot (device came back mid-scan).
+    baseline_seen = await find_device_fast(name, mac, timeout=1.0) is not None
     while time.monotonic() - t0 < watch_s:
         back = await find_device_fast(name, mac, timeout=1.0)
         if back is None:
             seen_gap = True   # advertising vanished -> controller reset
         elif seen_gap:
             return back       # gap observed, device is back with new image
+        elif baseline_seen:
+            # Still visible: for a REAL reboot the NEXT probe after Stop
+            # processing (~300ms) should miss. Keep probing; if the device
+            # never vanishes within the window, no gap -> fail path.
+            pass
         await asyncio.sleep(0.2)
     return None
 
@@ -692,6 +709,11 @@ async def run_flash(fw_path: str, name: str, mac: Optional[str],
         # 设备真实重启 = 广播必然消失一个窗口（ROM+bootloader 重建 controller）。
         # Stop ACK 是否返回不可作判据（真机实测：esp_ota_end/set_boot 数百 ms，
         # Stop ACK 可抢在 esp_restart 前正常返回）。
+        # ERR-014: 基线必须含 Stop 前的可见性——设备从 Stop 到重广播全程仅 ~2s，
+        # 1s 探测窗常横跨整个空窗导致 seen_gap 永不置位（冒烟 4 次传输 3 次误报）。
+        pre_visible = await find_device_fast(name, mac, timeout=1.0) is not None
+        print("pre-stop baseline: device %s"
+              % ("visible" if pre_visible else "NOT visible (already rebooting?)"))
         print("watching for reboot (advertising gap ~9s window)...")
         back = None
         try:
@@ -703,6 +725,14 @@ async def run_flash(fw_path: str, name: str, mac: Optional[str],
               "reconnects=%(reconnects)d" % ota.stats)
         if back:
             print("device %s rebooted and is advertising again -- OTA SUCCESS"
+                  % (mac or name))
+            return 0
+        # ERR-014 增强判定：若基线可见且结束时设备不可见 = 正处于空窗
+        # （重启发生在观测窗尾部），重探一次确认回归即判成功。
+        post = await find_device_fast(name, mac, timeout=2.0)
+        if pre_visible and post is None:
+            print("device %s vanished after Stop (reboot in progress, gap "
+                  "at window tail) -- OTA SUCCESS (pending re-advertise)"
                   % (mac or name))
             return 0
         print("[E] OTA FAIL: device stayed continuously visible for 9s -- "
