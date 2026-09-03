@@ -93,6 +93,16 @@ esp_ble_ota_callback_funs_t ota_cb_fun_t = {
     .recv_fw_cb = NULL
 };
 
+/* REQ-004 PR-1 vendor patch: session boundary events for the app-side
+ * transport (Start/Stop/disconnect). App registers via
+ * esp_ble_ota_set_session_cb(); the component itself stays session-agnostic. */
+static esp_ble_ota_session_cb_t s_session_cb = NULL;
+
+void esp_ble_ota_set_session_cb(esp_ble_ota_session_cb_t cb)
+{
+    s_session_cb = cb;
+}
+
 #ifndef CONFIG_OTA_WITH_PROTOCOMM
 esp_ble_ota_notification_check_t ota_notification = {
     .recv_fw_ntf_enable = false,
@@ -544,6 +554,9 @@ ble_ota_start_write_chr(struct os_mbuf *om)
         cmd_ack[18] = crc16 & 0xff;
         cmd_ack[19] = (crc16 & 0xff00) >> 8;
         esp_ble_ota_notification_data(connection_handle, attribute_handle, cmd_ack, ota_char);
+        if (s_session_cb) {
+            s_session_cb(ESP_BLE_OTA_SESSION_START);
+        }
     } else if ((om->om_data[0] == 0x02) && (om->om_data[1] == 0x00)) {
         printf("\nCMD_CHAR -> 0 : %d, 1 : %d", om->om_data[0],
                om->om_data[1]);
@@ -573,6 +586,9 @@ ble_ota_start_write_chr(struct os_mbuf *om)
         fw_buf_offset = 0;
         free(fw_buf);
         fw_buf = NULL;
+        if (s_session_cb) {
+            s_session_cb(ESP_BLE_OTA_SESSION_STOP);
+        }
     }
 }
 
@@ -982,6 +998,9 @@ esp_ble_ota_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnect; reason=%d ", event->disconnect.reason);
         esp_ble_ota_print_conn_desc(&event->disconnect.conn);
+        if (s_session_cb) {
+            s_session_cb(ESP_BLE_OTA_SESSION_DISCONNECT);
+        }
 
         /* Connection terminated; resume advertising. */
 #if CONFIG_EXAMPLE_EXTENDED_ADV

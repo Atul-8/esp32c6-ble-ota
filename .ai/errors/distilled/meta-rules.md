@@ -96,7 +96,19 @@
 - **触发关键词(keywords)**: tkinter, Variable.get, 跨线程, main thread is not in main loop, GUI worker, 线程边界, 队列轮询, headless 冒烟
 - **embedding**: (预留)
 
-### META-009-BUILD: IDF v5→v6 迁移中 monolithic driver 组件已拆分，API 以目标版本头文件为准
+### META-010-CONCURRENCY: 会话/流标志必须单写者；异步流重定向必须显式排空旧数据
+
+- **规则**: 三条互补纪律。① 跨上下文的会话/流状态标志（armed、active、connected 等）只能有一个写入者——事件源头上下文（协议回调）；消费者任务只读，其错误处理路径禁止顺手清除/修改该标志（两个写入者对"会话该不该继续"认知相反时，标志抖动会让重定向永不收敛）。② 异步流重定向（旧会话作废→新会话开始）必须在"新会话接受数据"之前显式排空在途缓冲（ringbuf/队列），禁止依赖"新数据会晚于标志置位到达"的时序假设——在途 straggler 被新会话消费即错位（P0-1 变体：epoch 拦得住旧 epoch 写入，拦不住旧数据进新会话）。③ 消费者的收尾动作（finish/commit）与对端的终止信号（Stop/断连）存在竞速时，数据路径不得检查终止标志（保收尾），终止收敛只在"无数据可消费"的超时路径做（poll 超时 + 标志为假 → abort）。
+- **适用场景**: 生产者-消费者 + 会话重试架构（OTA/上传/流式传输）；协议回调与泵任务分属不同任务上下文的任何组件桥接层；上位机的传输成功判定设计
+- **源错误**: ERR-013（PR-1 回归 B：armed 双写者致重试 lazy-open 永不触发；ringbuf straggler 错位窗口；Stop ACK 抢在 esp_restart 前返回致 host 判据反转失效）
+- **检查方式**: 审查每个跨任务 volatile 标志的赋值点（grep 所有 `flag = `），写入者 >1 即标红；审查重定向路径：标志置位与首个新数据消费之间是否存在排空动作；审查收尾竞速：数据循环内是否引用终止标志、终止收敛是否只依赖超时路径；上位机成功判定：是否存在"单协议事件推断物理行为"的判据（应改为观测物理层信号如广播消失/连接断开）
+- **类别(category)**: CONCURRENCY
+- **关联层(layer)**: interface, core
+- **关联专家(applies_to)**: embedded-firmware-engineer, pc-host-engineer
+- **触发关键词**: 会话重试, armed 标志, 双写者, straggler, ringbuf 排空, Stop ACK, 竞速, 收尾, 广播空窗, 重启判定, lazy-open, epoch
+- **embedding**: (预留)
+
+### META-009-BUILD: IDF v5→v6 迁移中 monolithic driver 组件已拆分，API 以目标版本头���件为准
 
 - **规则**: ESP-IDF v6 已把 `driver` 组件拆分为 esp_driver_uart/esp_driver_gpio/esp_driver_i2c 等，组件 CMakeLists 中 `REQUIRES/PRIV_REQUIRES driver` 不再覆盖 uart 等外设头；驱动 API 名（如 `uart_wait_tx_idle_polling` vs 想象中的 `uart_wait_tx_done_polling`）必须 grep 目标版本 IDF 组件源码确认后使用，禁止凭其他 SDK/旧版本记忆书写。跨大版本升级后组件首次参与编译要盯 -Werror 全清零
 - **适用场景**: ESP-IDF v6.x 新写/移植 UART/SPI/I2C/GPIO 组件；从 v4/v5 工程迁移驱动代码；新组件首次接入构建

@@ -29,13 +29,15 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
 - [注意] components/ble_ota 为本地 vendor 组件（v0.1.17 + 设备名 Kconfig patch），勿在 main/idf_component.yml 重新声明 espressif/ble_ota（重名冲突）；升级组件需重新 vendor
 
 ## 正在进行
-- [REQ-004 PR-1 / TASK-005] ota_sink 抽象 + ble_transport 迁移 + epoch 会话修复（embedded-firmware-engineer）: 设计已读 100%，编码 0% | 上次更新: 2026-09-03
-  设计文档 `.ai/docs/design-ota-transport-abstraction.md` §B/§5.1/§7-PR1 为唯一权威
-  计划：ota_sink.h/.c（epoch/单写者/lazy-open 支撑）→ vendor 补丁（~25 行会话回调）→ ble_transport.c/.h（迁 ota_task.c）→ main.c 接线 → host P0-2 判定增强 → 构建+烧录+回归 A/B/C
-  [验证: shared✓(无变更) core✗ interface✗ presentation✗]
+- [REQ-004 PR-1 / TASK-005] ota_sink 抽象 + ble_transport 迁移 + epoch 会话修复（embedded-firmware-engineer）: **交付完成，真机回归全绿** | 上次更新: 2026-09-03
+  交付：ota_core/ota_sink.h/.c（epoch/单写者/延迟 abort）+ main/ble_transport.c/.h（迁 ota_task.c，ota_task 已删）
+  + vendor 补丁 ~25 行（3 会话边界回调）+ host P0-2 广播空窗判定 + P2-14 Stop 3s + sink 单测 21/21 PASS
+  回归：A 基础路径 ✓（161 sectors → finish ok → activated → PENDING_VERIFY→confirmed）
+  B 断连重试 ✓×2（epoch=1 → disconnect → abort → 新 Start → epoch=2 → 成功，ERR-013 修复后 D/G 两轮全绿）
+  C 开机无全擦 ✓（启动日志无 esp_ota_begin，adv started 仅 457ms）
+  [验证: shared✓ core✓(单测21/21+构建绿) interface✓(构建绿+真机) presentation✓(host CLI 真机)]
 
 ## 未完成队列
-- [ ] REQ-004 PR-1（待用户批准后实施）：ota_sink 抽象 + ble_transport 迁移 + P0-1 修复（epoch 机制），固件 ~660 行
 - [ ] REQ-004 PR-2：WiFi 通道（esp_http_client 流式 + esp_ota_resume Range 续传），固件 ~475 行
 - [ ] REQ-004 PR-3：USB 通道（USB-Serial/JTAG 自定义帧协议 + pyserial 上位机），固件 ~410 行
 - [ ] HXD019EU 真机联调（下轮）：接线 UART1 GPIO4/5 ↔ 芯片 57600-8N1；确认 README 疑点 2/3/4
@@ -45,9 +47,10 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
 - [ ] issue #10 文档收尾（遗留）
 
 ## 上次中断点
-- 文件: .ai/docs/design-ota-transport-abstraction.md（REQ-004 设计稿落盘完毕）
-- 操作: 设计定稿，关键纠偏——C6 无 USB-OTG/TinyUSB 不可行、USB 引脚 GPIO12/13、esp_ota_resume 可支撑 WiFi 续传、esp_https_ota 因无注入口否决
-- 待恢复: PM 向用户汇报设计结论并请求批准 → 批准后 PR-1 实施（任务拆分见设计文档 §7）
+- 文件: firmware/main/ble_transport.c（ERR-013 修复版）/ host/ble_ota_host.py（广播空窗判定）
+- 操作: PR-1 全部交付并通过真机回归 A/B/C（B 首版暴露 ERR-013 三缺陷，修复后 D/G 两轮全绿）
+- 待恢复: 无阻塞——PR-2（WiFi）按设计文档 §5.2 实施，可直接复用 ota_sink（resume=true 路径）；
+  firmware/host 改动待 commit（主仓库）
 
 ## 环境事实
 - ESP-IDF: v6.0.2 @ WSL `/root/esp/v6.0.2/esp-idf`
@@ -71,3 +74,4 @@ ESP32-C6 BLE OTA — 基于 espressif/ble_ota v0.1.17 官方组件的固件 + Wi
 - ERR-008 上位机误判 sector 0 全零成功 ACK（META-005: ACK 合法性=自校验判定）
 - ERR-009 ota_task 丢失循环末尾无条件 give → 信号量泄漏流水线冻结（META-006）
 - ERR-012 IDF v6 driver 组件拆分/uart API 更名/no-op 语句三连 -Werror（META-009）
+- ERR-013 PR-1 会话重试三缺陷（armed 双写者/ringbuf straggler/Stop ACK 判据失效）→ 单写者+排空+广播空窗（META-010）

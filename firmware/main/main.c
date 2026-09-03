@@ -5,13 +5,20 @@
  *   NVS -> 进度日志 -> 版本/分区/镜像状态日志 -> 回滚确认(必须先于 BLE init：
  *   PENDING_VERIFY 状态下 esp_ota_begin 会拒绝) -> controller init(IDF v6 下
  *   ble_ota 组件的 host_init 只初始化 host 栈，见 nimble_port.c 源码核实) ->
- *   ringbuf -> host_init -> 回调注册 -> ota_task -> 广播名锚点日志
+ *   ble_transport(ringbuf+泵任务+sink 事件回调注册) -> host_init -> 数据回调注册 ->
+ *   广播名锚点日志
+ *
+ * REQ-004 PR-1 变更：ota_task.c 删除，落盘职责拆入 ota_sink（ota_core，唯一会话
+ * 所有者，epoch 会话代数修 P0-1）+ ble_transport（本目录，ringbuf/notify_sem/
+ * lazy-open 泵任务）。开机不再 esp_ota_begin 全擦（修 P1-7）——begin 时机后移到
+ * Start 后首个数据 chunk 的 session_open。
  *
  * 广播名（ERR-006）：由 vendor 组件 components/ble_ota 在 host_init 内部、
  * host task 启动前经 CONFIG_BLE_OTA_DEVICE_NAME 设置（sdkconfig.defaults 配置
  * 为 "C6-OTA-1128"），sync_cb 构造广播字段时读到的就是最终值，app 不再事后覆盖。
  */
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -30,11 +37,10 @@
 #include "ota_rollback.h"
 #include "ota_progress_store.h"
 #include "ota_version.h"
-#include "ota_task.h"
+#include "ota_sink.h"
+#include "ble_transport.h"
 
 static const char *TAG = "APP";
-
-#define OTA_RINGBUF_SIZE 8192
 
 static const char *img_state_str(const esp_partition_t *p)
 {
@@ -128,9 +134,10 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
     ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_BLE));
 
-    /* 6. ringbuf（先于回调注册，回调会写入） */
-    if (!ble_ota_ringbuf_init(OTA_RINGBUF_SIZE)) {
-        ESP_LOGE(TAG, "[BLE_OTA] init ringbuf fail");
+    /* 6. transport（ringbuf + 泵任务 + 会话回调注册；内部 ota_sink_init 注册事件回调）。
+     *    不再开机起 esp_ota_begin——会话改为 Start 后首个数据 lazy-open（修 P1-7）。 */
+    if (!ble_ota_transport_init(0)) {
+        ESP_LOGE(TAG, "[BLE_OTA] init transport fail");
         return;
     }
 
@@ -138,9 +145,8 @@ void app_main(void)
      *    host task 启动前写入）+ 开始广播（同步回调内异步起广播） */
     ESP_ERROR_CHECK(esp_ble_ota_host_init());
 
-    /* 8. 注册固件数据回调 + 启动落盘任务 */
-    ESP_ERROR_CHECK(esp_ble_ota_recv_fw_data_callback(ota_recv_fw_cb));
-    ota_task_init();
+    /* 8. 注册固件数据回调（每 sector 转送 transport ringbuf） */
+    ESP_ERROR_CHECK(esp_ble_ota_recv_fw_data_callback(ble_ota_transport_recv_cb));
 
     /* 9. 广播锚点 */
     wait_adv_and_log();

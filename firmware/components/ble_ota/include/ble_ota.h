@@ -174,6 +174,27 @@ unsigned int esp_ble_ota_get_fw_length(void);
  *
  */
 void esp_ble_ota_finish(void);
+
+/**
+ * Session lifecycle events reported to the app (REQ-004 PR-1 vendor patch).
+ * The component knows nothing about OTA sessions; it only reports the
+ * protocol-level session boundaries so the app-side transport can align
+ * its own session state (epoch invalidation / lazy session open).
+ */
+typedef enum {
+    ESP_BLE_OTA_SESSION_START,       /**< Start cmd accepted (fw_length captured) */
+    ESP_BLE_OTA_SESSION_STOP,        /**< Stop cmd accepted */
+    ESP_BLE_OTA_SESSION_DISCONNECT,  /**< GAP disconnect */
+} esp_ble_ota_session_evt_t;
+
+typedef void (*esp_ble_ota_session_cb_t)(esp_ble_ota_session_evt_t evt);
+
+/**
+ * @brief Register the app callback for session boundary events (optional).
+ *
+ * @param[in]  cb : callback invoked on Start/Stop/disconnect; NULL unregisters.
+ */
+void esp_ble_ota_set_session_cb(esp_ble_ota_session_cb_t cb);
 #ifdef __cplusplus
 }
 #endif

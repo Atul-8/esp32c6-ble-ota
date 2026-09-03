@@ -110,6 +110,7 @@ ACK_CMD_STATUS_STOP_OK = 0x0002
 # Tunables
 ACK_TIMEOUT_S = 10.0        # per-sector-end ACK wait
 ACK_RETRIES = 3             # tail packet retransmits on ACK timeout
+STOP_ACK_TIMEOUT_S = 3.0    # Stop cmd ACK wait (P2-14: device is rebooting anyway)
 CONNECT_TIMEOUT_S = 15.0
 MTU_EXPECTED = 517
 WRITE_WITH_RESPONSE = True  # source shows WRITE flag only; keep True
@@ -284,9 +285,15 @@ class BleakOtaClient:
         self._vlog("Start ACK ok: %s" % frame.hex())
         self.emit("start_ack", frame=frame.hex())
 
-    async def send_stop(self) -> None:
-        """Write Stop command and wait for command ACK (status 0x0002)."""
-        waiter = asyncio.ensure_future(self._wait_indicate(COMMAND_UUID, ACK_TIMEOUT_S))
+    async def send_stop(self) -> bool:
+        """Write Stop command and wait for command ACK (status 0x0002).
+
+        Uses a short 3s window (P2-14): on the success path the device is
+        already rebooting, so a long wait is dead time. The ACK outcome is
+        informational only -- reboot verification is done by the advertising
+        gap watch (wait_reboot_with_gap), see run_flash.
+        """
+        waiter = asyncio.ensure_future(self._wait_indicate(COMMAND_UUID, STOP_ACK_TIMEOUT_S))
         try:
             await self.client.write_gatt_char(COMMAND_UUID, b"\x02\x00",
                                               response=WRITE_WITH_RESPONSE)
@@ -296,7 +303,7 @@ class BleakOtaClient:
             # best-effort
             print("[W] Stop ACK timeout (device may be rebooting)")
             self.emit("stop_timeout")
-            return
+            return False
         except BaseException:
             waiter.cancel()
             try:
@@ -309,6 +316,7 @@ class BleakOtaClient:
         self.emit("stop_ack", status=status)
         if status != ACK_CMD_STATUS_STOP_OK:
             print("[W] Stop ACK status=0x%04x (expected 0x0002)" % status)
+        return True
 
     def build_packet(self, sector: int, seq: int, payload: bytes,
                      with_tail_crc: bool, sector_data: bytes = b"") -> bytes:
@@ -451,6 +459,45 @@ class BleakOtaClient:
 # ---------------------------------------------------------------------------
 # CLI helpers
 # ---------------------------------------------------------------------------
+
+async def wait_reboot_with_gap(name: str, mac: Optional[str],
+                               watch_s: float = 9.0) -> Optional[str]:
+    """Watch advertising for a reboot gap, then return the device address.
+
+    P0-2 reboot detection: a real esp_restart tears down the BLE controller,
+    so advertising MUST disappear for ~1.5-2.5s (ROM+bootloader+init) before
+    coming back. We probe with short (1s) scans: any gap window proves a
+    reboot happened; a device that stays continuously visible did NOT reboot
+    (firmware-side failure -- the P0-2 false-success scenario).
+
+    Returns the address after it reappears post-gap, or None if no gap was
+    observed within watch_s (device never rebooted) .
+    """
+    t0 = time.monotonic()
+    seen_gap = False
+    while time.monotonic() - t0 < watch_s:
+        back = await find_device_fast(name, mac, timeout=1.0)
+        if back is None:
+            seen_gap = True   # advertising vanished -> controller reset
+        elif seen_gap:
+            return back       # gap observed, device is back with new image
+        await asyncio.sleep(0.2)
+    return None
+
+
+async def find_device_fast(name_prefix: str, mac: Optional[str],
+                           timeout: float = 1.0) -> Optional[str]:
+    """Short-timeout variant of find_device for gap probing."""
+    found = await BleakScanner.discover(timeout=timeout, return_adv=True)
+    mac_n = mac.replace(":", "").lower() if mac else None
+    for d, adv in found.values():
+        name = adv.local_name or d.name or ""
+        if name_prefix and name.startswith(name_prefix):
+            return d.address
+        if mac_n and d.address.replace(":", "").lower() == mac_n:
+            return d.address
+    return None
+
 
 def progress_bar(done: int, total: int, width: int = 32) -> str:
     """ASCII progress bar, Windows console safe."""
@@ -626,39 +673,42 @@ async def run_flash(fw_path: str, name: str, mac: Optional[str],
 
         elapsed = time.monotonic() - t0
         print()
-        if current >= total_sectors:
+        transfer_ok = current >= total_sectors
+        if transfer_ok:
             rate = len(fw) / 1024.0 / max(elapsed, 1e-6)
             print("transfer complete: %d bytes in %.1fs (avg %.1f KB/s)"
                   % (len(fw), elapsed, rate))
-            print("device will esp_ota_end + set_boot_partition + esp_restart")
-            print("sending Stop...")
+            print("sending Stop (device may have already rebooted)...")
             await ota.send_stop()
-            ok = True
-        else:
-            ok = False
         await ota.disconnect()
 
-        # ---- wait for device to come back with the new firmware -------
-        if ok:
-            print("waiting for device reboot (adv back within ~3-5s)...")
-            back = None
-            for _ in range(3):
-                await asyncio.sleep(2.0)
-                back = await find_device(name, mac)
-                if back:
-                    break
-            if back:
-                print("device %s is advertising again -- OTA SUCCESS" % (mac or name))
-            else:
-                print("[W] device not seen again after reboot window; "
-                      "check serial log for anchors")
+        if not transfer_ok:
             print("stats: packets=%(packets_sent)d sectors=%(sectors_done)d "
                   "jumps=%(sector_jumps)d tail_retries=%(tail_retries)d "
                   "reconnects=%(reconnects)d" % ota.stats)
-            return 0
+            return 1
+
+        # ---- P0-2 reboot verification (adv-gap observation) -----------
+        # 设备真实重启 = 广播必然消失一个窗口（ROM+bootloader 重建 controller）。
+        # Stop ACK 是否返回不可作判据（真机实测：esp_ota_end/set_boot 数百 ms，
+        # Stop ACK 可抢在 esp_restart 前正常返回）。
+        print("watching for reboot (advertising gap ~9s window)...")
+        back = None
+        try:
+            back = await wait_reboot_with_gap(name, mac, watch_s=9.0)
+        except (BleakError, OSError) as exc:
+            print("[W] gap watch failed: %s" % exc)
         print("stats: packets=%(packets_sent)d sectors=%(sectors_done)d "
               "jumps=%(sector_jumps)d tail_retries=%(tail_retries)d "
               "reconnects=%(reconnects)d" % ota.stats)
+        if back:
+            print("device %s rebooted and is advertising again -- OTA SUCCESS"
+                  % (mac or name))
+            return 0
+        print("[E] OTA FAIL: device stayed continuously visible for 9s -- "
+              "no reboot gap observed (device did NOT restart)")
+        print("[!] check device serial log for [OTA_SINK] anchors "
+              "(finish FAIL / session open rejected / STALE)")
         return 1
     except (BleakError, asyncio.TimeoutError, OSError) as exc:
         print("\n[E] OTA failed: %s" % exc)
